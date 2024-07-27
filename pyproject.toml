@@ -24,7 +24,7 @@ packages = [{ include = "tech_debt_hotspot" }]
 
 
 [tool.poetry.dependencies]
-python = "^3.11,<3.12"
+python = "^3.8,<3.12"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.2"
