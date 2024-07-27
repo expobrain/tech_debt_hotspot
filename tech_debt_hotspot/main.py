@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from pathlib import Path
 from typing import Iterator
@@ -7,7 +8,7 @@ import radon.metrics
 import sh
 
 
-def maintainability_index_iter(directory: Path) -> Iterator[tuple[Path, dict[str, float]]]:
+def maintainability_index_iter(directory: Path, /) -> Iterator[tuple[Path, dict[str, float]]]:
     for filename in directory.glob("**/*.py"):
         code = filename.read_text()
         mi_index = radon.metrics.mi_visit(code, multi=True)
@@ -15,7 +16,7 @@ def maintainability_index_iter(directory: Path) -> Iterator[tuple[Path, dict[str
         yield filename.relative_to(directory), mi_index
 
 
-def changes_count_iter(directory: Path) -> Iterator[tuple[Path, int]]:
+def changes_count_iter(directory: Path, /) -> Iterator[tuple[Path, int]]:
     git_log = sh.git(
         "log",
         "--name-only",
@@ -42,6 +43,7 @@ def main() -> None:
 
 
 @main.command(help="Collect maitainability stats for the given directory")
+@click.option("-j", "--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.argument(
     "directory",
     type=click.Path(
@@ -53,12 +55,19 @@ def main() -> None:
         path_type=Path,
     ),
 )
-def mi(directory: Path) -> None:
-    for filename, mi_index in maintainability_index_iter(directory):
-        click.echo(f"{filename} --> {mi_index}")
+def mi(directory: Path, json_output: bool) -> None:
+    maintainability_index = maintainability_index_iter(directory)
+
+    if json_output:
+        data = {filename.as_posix(): mi_index for filename, mi_index in maintainability_index}
+        click.echo(json.dumps(data))
+    else:
+        for filename, mi_index in maintainability_index:
+            click.echo(f"{filename} --> {mi_index}")
 
 
 @main.command(help="Collect number of changes per file per given period")
+@click.option("-j", "--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.argument(
     "directory",
     type=click.Path(
@@ -70,9 +79,15 @@ def mi(directory: Path) -> None:
         path_type=Path,
     ),
 )
-def changes(directory: Path) -> None:
-    for filename, changes_count in changes_count_iter(directory):
-        click.echo(f"{filename} --> {changes_count}")
+def changes(directory: Path, json_output: bool) -> None:
+    changes_count = changes_count_iter(directory)
+
+    if json_output:
+        data = {filename.as_posix(): changes_count for filename, changes_count in changes_count}
+        click.echo(json.dumps(data))
+    else:
+        for filename, count in changes_count:
+            click.echo(f"{filename} --> {count}")
 
 
 if __name__ == "__main__":
