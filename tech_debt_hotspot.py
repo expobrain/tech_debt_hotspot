@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from enum import Enum, unique
 from pathlib import Path
-from typing import Iterable, Iterator, Mapping
+from typing import Final, Iterable, Iterator, Mapping
 
 import click
 import radon.metrics
@@ -15,7 +15,8 @@ import sh
 from loguru import logger
 from tqdm import tqdm
 
-ROOT_PATH = Path(".")
+ROOT_PATH: Final = Path(".")
+MINIMUM_MAINTAINABILITY_INDEX: Final = 0.01
 
 
 @unique
@@ -56,6 +57,9 @@ def maintainability_index_iter(directory: Path, /) -> Iterator[FileMaintainabili
     for filename in tqdm(filenames, unit="file", desc="Processing files"):
         code = filename.read_text()
         maintainability_index = radon.metrics.mi_visit(code, multi=True)
+
+        # We cannot have a 0% maintainability index so we set a very low number
+        maintainability_index = max(MINIMUM_MAINTAINABILITY_INDEX, maintainability_index)
 
         yield FileMaintainability(
             path=filename.relative_to(directory), maitainability_index=maintainability_index
