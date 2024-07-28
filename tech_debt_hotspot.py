@@ -12,6 +12,8 @@ from typing import Iterable, Iterator, Mapping
 import click
 import radon.metrics
 import sh
+from loguru import logger
+from tqdm import tqdm
 
 ROOT_PATH = Path(".")
 
@@ -47,7 +49,11 @@ class FileMaintainability:
 
 
 def maintainability_index_iter(directory: Path, /) -> Iterator[FileMaintainability]:
-    for filename in directory.glob("**/*.py"):
+    logger.info("Collecting maintainability indexes ...")
+
+    filenames = list(directory.glob("**/*.py"))
+
+    for filename in tqdm(filenames, unit="file", desc="Processing files"):
         code = filename.read_text()
         maintainability_index = radon.metrics.mi_visit(code, multi=True)
 
@@ -57,6 +63,8 @@ def maintainability_index_iter(directory: Path, /) -> Iterator[FileMaintainabili
 
 
 def changes_count_iter(directory: Path, /) -> Iterator[FileChanges]:
+    logger.info("Collecting changes count ...")
+
     git_log = sh.git(
         "log",
         "--name-only",
@@ -71,6 +79,8 @@ def changes_count_iter(directory: Path, /) -> Iterator[FileChanges]:
     filenames = (directory / filename_str for filename_str in filenames_str)
     filenames = (filename for filename in filenames if filename.suffix == ".py")
     filenames = (filename.resolve().relative_to(directory) for filename in filenames)
+
+    logger.info("Counting changes ...")
 
     changes_counter = Counter(filenames)
     changes_count = (
@@ -93,6 +103,8 @@ def get_path_type(filename: Path, /) -> PathType:
 def update_maitainability_metrics(
     metrics: dict[Path, PathMetrics], maitainability_data: Iterable[FileMaintainability], /
 ) -> None:
+    logger.info("Updating maintainability metrics ...")
+
     for maitainability in maitainability_data:
         for parent in filename_parent_iter(maitainability.path):
             path_metric = metrics.setdefault(
@@ -106,6 +118,8 @@ def update_maitainability_metrics(
 def update_changes_count_metrics(
     metrics: dict[Path, PathMetrics], changes_count_data: Iterable[FileChanges], /
 ) -> None:
+    logger.info("Updating changes count metrics ...")
+
     for changes_count in changes_count_data:
         for parent in filename_parent_iter(changes_count.filename):
             path_metrics = metrics.setdefault(
@@ -115,7 +129,8 @@ def update_changes_count_metrics(
 
 
 def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
-    # Print to stdout
+    logger.info("Printing metrics to stdout ...")
+
     fieldnames = ["path", "path_type", "maintainability_index", "changes_count", "hotspot_index"]
 
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
