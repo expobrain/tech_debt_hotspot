@@ -96,8 +96,8 @@ def changes_count_iter(directory: Path, /) -> Iterator[FileChanges]:
 
 
 def filename_parent_iter(filename: Path, /) -> Iterator[Path]:
-    yield from filename.parents
     yield filename
+    yield from filename.parents
 
 
 def get_path_type(filename: Path, /) -> PathType:
