@@ -133,3 +133,4 @@ dmypy.json
 
 # pytest-testmon
 .testmondata*
+.DS_Store
