@@ -1,0 +1,403 @@
+import textwrap
+from pathlib import Path
+from typing import Dict, Mapping, Sequence
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from tech_debt_hotspot import (
+    MINIMUM_MAINTAINABILITY_INDEX,
+    ROOT_PATH,
+    FileChanges,
+    FileMaintainability,
+    PathMetrics,
+    PathType,
+    changes_count_iter,
+    filename_parent_iter,
+    get_path_type,
+    maintainability_index_iter,
+    print_metrics,
+    update_changes_count_metrics,
+    update_maitainability_metrics,
+)
+
+
+class TestPathMetricsHotspotIndex:
+    def test_normal_values(self) -> None:
+        # arrange
+        metrics = PathMetrics(
+            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=50, maintainability_index=80
+        )
+
+        # act & assert
+        assert metrics.hotspot_index == pytest.approx(62.5)
+
+    def test_zero_changes_count(self) -> None:
+        # arrange
+        metrics = PathMetrics(
+            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=0, maintainability_index=80
+        )
+
+        # act & assert
+        assert metrics.hotspot_index == pytest.approx(0.0)
+
+    def test_zero_maintainability_index(self) -> None:
+        # arrange
+        metrics = PathMetrics(
+            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=50, maintainability_index=0
+        )
+
+        # act & assert
+        with pytest.raises(ZeroDivisionError):
+            metrics.hotspot_index
+
+    @pytest.mark.parametrize(
+        "changes_count, maintainability_index, expected",
+        [
+            pytest.param(-50, 80, -62.5),
+            pytest.param(50, -80, -62.5),
+        ],
+    )
+    def test_negative_values(
+        self, changes_count: int, maintainability_index: int, expected: float
+    ) -> None:
+        # arrange
+        metrics = PathMetrics(
+            path=ROOT_PATH,
+            path_type=PathType.PACKAGE,
+            changes_count=changes_count,
+            maintainability_index=maintainability_index,
+        )
+
+        # act & assert
+        assert metrics.hotspot_index == pytest.approx(expected)
+
+
+class TestMaitainabilityIndexIter:
+    @patch("tech_debt_hotspot.radon.metrics.mi_visit")
+    @patch("tech_debt_hotspot.Path.glob")
+    def test_maintainability_index_iter(
+        self, mock_glob: MagicMock, mock_mi_visit: MagicMock
+    ) -> None:
+        # arrange
+        mock_file1 = MagicMock(spec=Path)
+        mock_file1.read_text.return_value = "def foo(): pass"
+        mock_file1.relative_to.return_value = Path("file1.py")
+
+        mock_file2 = MagicMock(spec=Path)
+        mock_file2.read_text.return_value = "def bar(): pass"
+        mock_file2.relative_to.return_value = Path("file2.py")
+
+        mock_glob.return_value = [mock_file1, mock_file2]
+
+        mock_mi_visit.side_effect = [50, 30]
+
+        directory = Path("/some/directory")
+
+        # act
+        results = list(maintainability_index_iter(directory))
+
+        # assert
+        assert results == [
+            FileMaintainability(path=Path("file1.py"), maitainability_index=50),
+            FileMaintainability(path=Path("file2.py"), maitainability_index=30),
+        ]
+
+    @patch("tech_debt_hotspot.radon.metrics.mi_visit")
+    @patch("tech_debt_hotspot.Path.glob")
+    def test_maintainability_index_below_minimum(
+        self, mock_glob: MagicMock, mock_mi_visit: MagicMock
+    ) -> None:
+        # arrange
+        mock_file = MagicMock(spec=Path)
+        mock_file.read_text.return_value = "def foo(): pass"
+        mock_file.relative_to.return_value = Path("file.py")
+
+        mock_glob.return_value = [mock_file]
+
+        mock_mi_visit.return_value = 0
+
+        directory = Path("/some/directory")
+
+        # act
+        results = list(maintainability_index_iter(directory))
+
+        # assert
+        assert results == [
+            FileMaintainability(
+                path=Path("file.py"), maitainability_index=MINIMUM_MAINTAINABILITY_INDEX
+            )
+        ]
+
+
+class TestChangesCountIter:
+    @patch("tech_debt_hotspot.sh.git")
+    def test_changes_count_iter(
+        self,
+        # mock_resolve: MagicMock,
+        mock_git: MagicMock,
+    ) -> None:
+        # arrange
+        mock_git.return_value = "file1.py\nfile2.py\nfile1.py\nfile3.py\n"
+
+        directory = Path("/some/directory")
+
+        # act
+        results = list(changes_count_iter(directory))
+
+        # assert
+        expected = [
+            FileChanges(filename=Path("file1.py"), changes_count=2),
+            FileChanges(filename=Path("file2.py"), changes_count=1),
+            FileChanges(filename=Path("file3.py"), changes_count=1),
+        ]
+
+        # Assertions
+        assert results == expected
+
+    @patch("tech_debt_hotspot.sh.git")
+    @pytest.mark.parametrize(
+        "git_log_output, expected",
+        [
+            pytest.param(
+                "file1.py\nfile2.py\nfile1.py\nfile3.py\n",
+                [
+                    FileChanges(filename=Path("file1.py"), changes_count=2),
+                    FileChanges(filename=Path("file2.py"), changes_count=1),
+                    FileChanges(filename=Path("file3.py"), changes_count=1),
+                ],
+            ),
+            pytest.param(
+                "file1.py\nfile1.py\nfile1.py\n",
+                [
+                    FileChanges(filename=Path("file1.py"), changes_count=3),
+                ],
+            ),
+            pytest.param("", []),
+        ],
+    )
+    def test_changes_count_iter_parametrized(
+        self, mock_git: MagicMock, git_log_output: str, expected: Sequence[FileChanges]
+    ) -> None:
+        # arrange
+        mock_git.return_value = git_log_output
+
+        directory = Path("/some/directory")
+
+        # act
+        results = list(changes_count_iter(directory))
+
+        # assert
+        assert results == expected
+
+
+class TestFilenameParentIter:
+    @pytest.mark.parametrize(
+        "input_path, expected",
+        [
+            pytest.param(
+                Path("/a/b/c/file.txt"),
+                [
+                    Path("/a/b/c/file.txt"),
+                    Path("/a/b/c"),
+                    Path("/a/b"),
+                    Path("/a"),
+                    Path("/"),
+                ],
+            ),
+            pytest.param(Path("/file.txt"), [Path("/file.txt"), Path("/")]),
+            pytest.param(Path("file.txt"), [Path("file.txt"), Path(".")]),
+        ],
+    )
+    def test_filename_parent_iter(self, input_path: Path, expected: Sequence[Path]) -> None:
+        # act
+        result = list(filename_parent_iter(input_path))
+
+        # assert
+        assert result == expected
+
+
+class TestGetPathType:
+    @pytest.mark.parametrize(
+        "filename, expected",
+        [
+            pytest.param(Path("module.py"), PathType.MODULE),
+            pytest.param(Path("directory/package"), PathType.PACKAGE),
+            pytest.param(Path("directory/another_module.py"), PathType.MODULE),
+        ],
+    )
+    def test_get_path_type(self, filename: Path, expected: PathType) -> None:
+        # act
+        result = get_path_type(filename)
+
+        # assert
+        assert result == expected
+
+
+class TestUpdateMaintainabilityMetrics:
+    @pytest.mark.parametrize(
+        "maintainability_data, expected",
+        [
+            pytest.param(
+                [FileMaintainability(path=Path("/a/b/c/file.py"), maitainability_index=70)],
+                {
+                    Path("/"): PathMetrics(
+                        path=Path("/"), path_type=PathType.PACKAGE, maintainability_index=70
+                    ),
+                    Path("/a"): PathMetrics(
+                        path=Path("/a"), path_type=PathType.PACKAGE, maintainability_index=70
+                    ),
+                    Path("/a/b"): PathMetrics(
+                        path=Path("/a/b"), path_type=PathType.PACKAGE, maintainability_index=70
+                    ),
+                    Path("/a/b/c"): PathMetrics(
+                        path=Path("/a/b/c"), path_type=PathType.PACKAGE, maintainability_index=70
+                    ),
+                    Path("/a/b/c/file.py"): PathMetrics(
+                        path=Path("/a/b/c/file.py"),
+                        path_type=PathType.MODULE,
+                        maintainability_index=70,
+                    ),
+                },
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "metrics",
+        [
+            pytest.param({}),
+            pytest.param(
+                {
+                    Path("/a/b"): PathMetrics(
+                        path=Path("/a/b"), path_type=PathType.PACKAGE, maintainability_index=80
+                    )
+                }
+            ),
+            pytest.param(
+                {
+                    Path("/a/b/c/file.py"): PathMetrics(
+                        path=Path("/a/b/c/file.py"), path_type=PathType.MODULE
+                    )
+                }
+            ),
+        ],
+    )
+    def test_update_maitainability_metrics(
+        self,
+        metrics: Dict[Path, PathMetrics],
+        maintainability_data: Sequence[FileMaintainability],
+        expected: Mapping[Path, PathMetrics],
+    ) -> None:
+        # act
+        update_maitainability_metrics(metrics, maintainability_data)
+
+        # assert
+        assert metrics == expected
+
+
+class TestUpdateChangesCountMetrics:
+    @pytest.mark.parametrize(
+        "changes_count_data, expected",
+        [
+            pytest.param(
+                [FileChanges(filename=Path("/a/b/c/file.py"), changes_count=70)],
+                {
+                    Path("/"): PathMetrics(
+                        path=Path("/"), path_type=PathType.PACKAGE, changes_count=70
+                    ),
+                    Path("/a"): PathMetrics(
+                        path=Path("/a"), path_type=PathType.PACKAGE, changes_count=70
+                    ),
+                    Path("/a/b"): PathMetrics(
+                        path=Path("/a/b"), path_type=PathType.PACKAGE, changes_count=70
+                    ),
+                    Path("/a/b/c"): PathMetrics(
+                        path=Path("/a/b/c"), path_type=PathType.PACKAGE, changes_count=70
+                    ),
+                    Path("/a/b/c/file.py"): PathMetrics(
+                        path=Path("/a/b/c/file.py"),
+                        path_type=PathType.MODULE,
+                        changes_count=70,
+                    ),
+                },
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "metrics",
+        [
+            pytest.param({}),
+            pytest.param(
+                {
+                    Path("/a/b"): PathMetrics(
+                        path=Path("/a/b"), path_type=PathType.PACKAGE, changes_count=0
+                    )
+                }
+            ),
+            pytest.param(
+                {
+                    Path("/a/b/c/file.py"): PathMetrics(
+                        path=Path("/a/b/c/file.py"), path_type=PathType.MODULE
+                    )
+                }
+            ),
+        ],
+    )
+    def test_update_maitainability_metrics(
+        self,
+        metrics: Dict[Path, PathMetrics],
+        changes_count_data: Sequence[FileChanges],
+        expected: Mapping[Path, PathMetrics],
+    ) -> None:
+        # act
+        update_changes_count_metrics(metrics, changes_count_data)
+
+        # assert
+        assert metrics == expected
+
+
+class TestPrintMetrics:
+    @pytest.mark.parametrize(
+        "metrics, expected",
+        [
+            pytest.param(
+                {
+                    Path("/a/b"): PathMetrics(
+                        path=Path("/a/b"),
+                        path_type=PathType.MODULE,
+                        maintainability_index=75.0,
+                        changes_count=5,
+                    )
+                },
+                (
+                    textwrap.dedent(
+                        """
+                    path,path_type,maintainability_index,changes_count,hotspot_index
+                    /a/b,module,75.0,5,6.666666666666667
+                    """
+                    )
+                    .strip()
+                    .splitlines()
+                ),
+                id="single_metric",
+            ),
+            pytest.param(
+                {},
+                ["path,path_type,maintainability_index,changes_count,hotspot_index"],
+                id="empty_metrics",
+            ),
+        ],
+    )
+    def test_print_metrics(
+        self,
+        metrics: Mapping[Path, PathMetrics],
+        expected: Sequence[str],
+        capfd: pytest.CaptureFixture,
+    ) -> None:
+        # act
+        print_metrics(metrics)
+
+        # assert
+        actual = capfd.readouterr().out.splitlines()
+
+        assert actual == expected
