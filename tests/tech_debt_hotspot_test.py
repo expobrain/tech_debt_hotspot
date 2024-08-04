@@ -1,8 +1,10 @@
 import textwrap
+from datetime import date
 from pathlib import Path
-from typing import Dict, Mapping, Sequence
+from typing import Dict, Mapping, Optional, Sequence, Set
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 
 from tech_debt_hotspot import (
@@ -15,7 +17,9 @@ from tech_debt_hotspot import (
     changes_count_iter,
     filename_parent_iter,
     get_path_type,
+    is_excluded,
     maintainability_index_iter,
+    parse_since,
     print_metrics,
     update_changes_count_metrics,
     update_maitainability_metrics,
@@ -75,9 +79,9 @@ class TestPathMetricsHotspotIndex:
 
 class TestMaitainabilityIndexIter:
     @patch("tech_debt_hotspot.radon.metrics.mi_visit")
-    @patch("tech_debt_hotspot.Path.glob")
+    @patch("tech_debt_hotspot.Path.rglob")
     def test_maintainability_index_iter(
-        self, mock_glob: MagicMock, mock_mi_visit: MagicMock
+        self, mock_rglob: MagicMock, mock_mi_visit: MagicMock
     ) -> None:
         # arrange
         mock_file1 = MagicMock(spec=Path)
@@ -88,14 +92,15 @@ class TestMaitainabilityIndexIter:
         mock_file2.read_text.return_value = "def bar(): pass"
         mock_file2.relative_to.return_value = Path("file2.py")
 
-        mock_glob.return_value = [mock_file1, mock_file2]
+        mock_rglob.return_value = [mock_file1, mock_file2]
 
         mock_mi_visit.side_effect = [50, 30]
 
         directory = Path("/some/directory")
+        excluded: Set[Path] = set()
 
         # act
-        results = list(maintainability_index_iter(directory))
+        results = list(maintainability_index_iter(directory, excluded))
 
         # assert
         assert results == [
@@ -104,23 +109,24 @@ class TestMaitainabilityIndexIter:
         ]
 
     @patch("tech_debt_hotspot.radon.metrics.mi_visit")
-    @patch("tech_debt_hotspot.Path.glob")
+    @patch("tech_debt_hotspot.Path.rglob")
     def test_maintainability_index_below_minimum(
-        self, mock_glob: MagicMock, mock_mi_visit: MagicMock
+        self, mock_rglob: MagicMock, mock_mi_visit: MagicMock
     ) -> None:
         # arrange
         mock_file = MagicMock(spec=Path)
         mock_file.read_text.return_value = "def foo(): pass"
         mock_file.relative_to.return_value = Path("file.py")
 
-        mock_glob.return_value = [mock_file]
+        mock_rglob.return_value = [mock_file]
 
         mock_mi_visit.return_value = 0
 
         directory = Path("/some/directory")
+        excluded: Set[Path] = set()
 
         # act
-        results = list(maintainability_index_iter(directory))
+        results = list(maintainability_index_iter(directory, excluded))
 
         # assert
         assert results == [
@@ -141,9 +147,10 @@ class TestChangesCountIter:
         mock_git.return_value = "file1.py\nfile2.py\nfile1.py\nfile3.py\n"
 
         directory = Path("/some/directory")
+        excluded: Set[Path] = set()
 
         # act
-        results = list(changes_count_iter(directory))
+        results = list(changes_count_iter(directory, excluded))
 
         # assert
         expected = [
@@ -183,12 +190,90 @@ class TestChangesCountIter:
         mock_git.return_value = git_log_output
 
         directory = Path("/some/directory")
+        excluded: Set[Path] = set()
 
         # act
-        results = list(changes_count_iter(directory))
+        results = list(changes_count_iter(directory, excluded))
 
         # assert
         assert results == expected
+
+    @patch("tech_debt_hotspot.sh.git")
+    @pytest.mark.parametrize(
+        "git_log_output, exclude, expected",
+        [
+            pytest.param(
+                "file1.py\nfile1.py\nfile1.py\n",
+                set(),
+                [FileChanges(filename=Path("file1.py"), changes_count=3)],
+            ),
+            pytest.param(
+                "file1.py\nfile2.py\nfile1.py\nfile3.py\n",
+                {Path("file2.py"), Path("file3.py")},
+                [FileChanges(filename=Path("file1.py"), changes_count=2)],
+            ),
+        ],
+    )
+    def test_changes_count_iter_excluded(
+        self,
+        mock_git: MagicMock,
+        git_log_output: str,
+        exclude: Set[Path],
+        expected: Sequence[FileChanges],
+    ) -> None:
+        # arrange
+        mock_git.return_value = git_log_output
+
+        directory = Path("/some/directory")
+
+        # act
+        results = list(changes_count_iter(directory, exclude))
+
+        # assert
+        assert results == expected
+
+    @patch("tech_debt_hotspot.sh.git")
+    def test_changes_count_iter_default_command(self, mock_git: MagicMock) -> None:
+        # arrange
+        directory = Path("/some/directory")
+        exclude: Set[Path] = set()
+
+        # act
+        list(changes_count_iter(directory, exclude))
+
+        # assert
+        mock_git.assert_called_once_with(
+            "log",
+            "--name-only",
+            "--relative",
+            "--pretty=format:",
+            directory.as_posix(),
+            _cwd=directory,
+            _tty_out=False,
+        )
+
+    @patch("tech_debt_hotspot.sh.git")
+    def test_changes_count_iter_with_sice(self, mock_git: MagicMock) -> None:
+        # arrange
+        directory = Path("/some/directory")
+        exclude: Set[Path] = set()
+        since = date(2023, 10, 1)
+
+        # act
+        list(changes_count_iter(directory, exclude, since=since))
+
+        # assert
+        mock_git.assert_called_once_with(
+            "log",
+            "--name-only",
+            "--relative",
+            "--pretty=format:",
+            "--since",
+            since.isoformat(),
+            directory.as_posix(),
+            _cwd=directory,
+            _tty_out=False,
+        )
 
 
 class TestFilenameParentIter:
@@ -401,3 +486,59 @@ class TestPrintMetrics:
         actual = capfd.readouterr().out.splitlines()
 
         assert actual == expected
+
+
+class TestIsExcluded:
+    @pytest.mark.parametrize(
+        "path, excluded, expected",
+        [
+            pytest.param(Path("/a/b/c/file.py"), {Path("/a/b")}, True, id="path_is_excluded"),
+            pytest.param(Path("/a/b/c/file.py"), {Path("/x/y")}, False, id="path_is_not_excluded"),
+            pytest.param(
+                Path("/a/b/c/file.py"),
+                {Path("/a/b"), Path("/x/y")},
+                True,
+                id="path_is_excluded_among_multiple",
+            ),
+            pytest.param(Path("/a/b/c/file.py"), set(), False, id="no_exclusions"),
+            pytest.param(
+                Path("/a/b/c/file.py"), {Path("/a/b/c/file.py")}, True, id="matching_filename"
+            ),
+            pytest.param(Path("/a/b/c/"), {Path("/a/b/c/")}, True, id="matching_path"),
+        ],
+    )
+    def test_is_excluded(self, path: Path, excluded: Set[Path], expected: bool) -> None:
+        # Act
+        result = is_excluded(path, excluded)
+
+        # Assert
+        assert result == expected
+
+
+class TestParseSince:
+    @pytest.mark.parametrize(
+        "since, expected",
+        [
+            pytest.param(None, None, id="since_is_none"),
+            pytest.param("2023-10-01", date(2023, 10, 1), id="valid_date"),
+        ],
+    )
+    def test_parse_since(self, since: Optional[str], expected: Optional[date]) -> None:
+        # Act
+        actual = parse_since(since)
+
+        # Assert
+        assert actual == expected
+
+    @pytest.mark.parametrize(
+        "since",
+        [
+            pytest.param("2023-13-01", id="invalid_month"),
+            pytest.param("2023-10-32", id="invalid_day"),
+            pytest.param("invalid-date", id="invalid_format"),
+        ],
+    )
+    def test_parse_since_fails_invalid(self, since: str) -> None:
+        # Act & Assert
+        with pytest.raises(click.BadParameter, match="Invalid date format. Use 'YYYY-MM-DD'"):
+            parse_since(since)
