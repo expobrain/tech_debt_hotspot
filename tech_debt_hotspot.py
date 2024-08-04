@@ -5,6 +5,7 @@ import math
 import sys
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date, datetime
 from enum import Enum, unique
 from pathlib import Path
 from typing import Final, Iterable, Iterator, Mapping, Sequence
@@ -79,18 +80,24 @@ def maintainability_index_iter(
         )
 
 
-def changes_count_iter(directory: Path, exclude: set[Path], /) -> Iterator[FileChanges]:
+def changes_count_iter(
+    directory: Path, exclude: set[Path], /, *, since: date | None = None
+) -> Iterator[FileChanges]:
     logger.info("Collecting changes count ...")
 
-    git_log = sh.git(
+    command = [
         "log",
         "--name-only",
         "--relative",
         "--pretty=format:",
-        directory,
-        _cwd=directory,
-        _tty_out=False,
-    )
+    ]
+
+    if since is not None:
+        command.extend(["--since", since.isoformat()])
+
+    command.append(directory.as_posix())
+
+    git_log = sh.git(*command, _cwd=directory, _tty_out=False)
 
     filenames_str: filter[str] = filter(None, git_log.split("\n"))
     filenames = (directory / filename_str for filename_str in filenames_str)
@@ -166,6 +173,16 @@ def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
         )
 
 
+def parse_since(since: str | None) -> date | None:
+    if since is None:
+        return None
+
+    try:
+        return datetime.strptime(since, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise click.BadParameter("Invalid date format. Use 'YYYY-MM-DD'") from exc
+
+
 @click.command(help="Collect tech debt hotspot stats for the given directory")
 @click.option(
     "--exclude",
@@ -181,6 +198,12 @@ def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
     ),
     help="Exclude directories from the analysis",
 )
+@click.option(
+    "--since",
+    "-s",
+    type=str,
+    help="Analyze changes since the given date. Date's format is 'YYYY-MM-DD'",
+)
 @click.argument(
     "directory",
     type=click.Path(
@@ -192,10 +215,12 @@ def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
         path_type=Path,
     ),
 )
-def main(directory: Path, exclude: Sequence[Path]) -> None:
+def main(directory: Path, exclude: Sequence[Path], since: str | None) -> None:
+    since_date = parse_since(since)
+
     exclude_set = set(exclude)
     maitainability_data = maintainability_index_iter(directory, exclude_set)
-    changes_count_data = changes_count_iter(directory, exclude_set)
+    changes_count_data = changes_count_iter(directory, exclude_set, since=since_date)
 
     metrics = {ROOT_PATH: PathMetrics(path=ROOT_PATH, path_type=PathType.PACKAGE)}
 

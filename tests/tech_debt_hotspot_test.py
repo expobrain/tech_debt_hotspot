@@ -1,8 +1,10 @@
 import textwrap
+from datetime import date
 from pathlib import Path
-from typing import Dict, Mapping, Sequence, Set
+from typing import Dict, Mapping, Optional, Sequence, Set
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 
 from tech_debt_hotspot import (
@@ -17,6 +19,7 @@ from tech_debt_hotspot import (
     get_path_type,
     is_excluded,
     maintainability_index_iter,
+    parse_since,
     print_metrics,
     update_changes_count_metrics,
     update_maitainability_metrics,
@@ -228,6 +231,49 @@ class TestChangesCountIter:
 
         # assert
         assert results == expected
+
+    @patch("tech_debt_hotspot.sh.git")
+    def test_changes_count_iter_default_command(self, mock_git: MagicMock) -> None:
+        # arrange
+        directory = Path("/some/directory")
+        exclude: Set[Path] = set()
+
+        # act
+        list(changes_count_iter(directory, exclude))
+
+        # assert
+        mock_git.assert_called_once_with(
+            "log",
+            "--name-only",
+            "--relative",
+            "--pretty=format:",
+            directory.as_posix(),
+            _cwd=directory,
+            _tty_out=False,
+        )
+
+    @patch("tech_debt_hotspot.sh.git")
+    def test_changes_count_iter_with_sice(self, mock_git: MagicMock) -> None:
+        # arrange
+        directory = Path("/some/directory")
+        exclude: Set[Path] = set()
+        since = date(2023, 10, 1)
+
+        # act
+        list(changes_count_iter(directory, exclude, since=since))
+
+        # assert
+        mock_git.assert_called_once_with(
+            "log",
+            "--name-only",
+            "--relative",
+            "--pretty=format:",
+            "--since",
+            since.isoformat(),
+            directory.as_posix(),
+            _cwd=directory,
+            _tty_out=False,
+        )
 
 
 class TestFilenameParentIter:
@@ -467,3 +513,32 @@ class TestIsExcluded:
 
         # Assert
         assert result == expected
+
+
+class TestParseSince:
+    @pytest.mark.parametrize(
+        "since, expected",
+        [
+            pytest.param(None, None, id="since_is_none"),
+            pytest.param("2023-10-01", date(2023, 10, 1), id="valid_date"),
+        ],
+    )
+    def test_parse_since(self, since: Optional[str], expected: Optional[date]) -> None:
+        # Act
+        actual = parse_since(since)
+
+        # Assert
+        assert actual == expected
+
+    @pytest.mark.parametrize(
+        "since",
+        [
+            pytest.param("2023-13-01", id="invalid_month"),
+            pytest.param("2023-10-32", id="invalid_day"),
+            pytest.param("invalid-date", id="invalid_format"),
+        ],
+    )
+    def test_parse_since_fails_invalid(self, since: str) -> None:
+        # Act & Assert
+        with pytest.raises(click.BadParameter, match="Invalid date format. Use 'YYYY-MM-DD'"):
+            parse_since(since)
