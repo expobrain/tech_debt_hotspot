@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum, unique
 from pathlib import Path
-from typing import Final, Iterable, Iterator, Mapping, Sequence
+from typing import Final, Iterable, Iterator, Sequence
 
 import click
 import radon.metrics
@@ -36,6 +36,9 @@ class PathMetrics:
     @property
     def hotspot_index(self) -> float:
         return self.changes_count / (self.maintainability_index / 100)
+
+    def is_deleted(self) -> bool:
+        return self.maintainability_index == math.inf
 
 
 @dataclass(frozen=True)
@@ -153,7 +156,7 @@ def update_changes_count_metrics(
             path_metrics.changes_count += changes_count.changes_count
 
 
-def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
+def print_metrics(metrics: Iterable[PathMetrics], /) -> None:
     logger.info("Printing metrics to stdout ...")
 
     fieldnames = ["path", "path_type", "maintainability_index", "changes_count", "hotspot_index"]
@@ -161,7 +164,7 @@ def print_metrics(metrics: Mapping[Path, PathMetrics], /) -> None:
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
     writer.writeheader()
 
-    for metric in metrics.values():
+    for metric in metrics:
         writer.writerow(
             {
                 "path": metric.path,
@@ -181,6 +184,13 @@ def parse_since(since: str | None) -> date | None:
         return datetime.strptime(since, "%Y-%m-%d").date()
     except ValueError as exc:
         raise click.BadParameter("Invalid date format. Use 'YYYY-MM-DD'") from exc
+
+
+def get_metrics_iter(metrics: Iterable[PathMetrics], deleted: bool, /) -> Iterable[PathMetrics]:
+    if not deleted:
+        metrics = (metric for metric in metrics if not metric.is_deleted())
+
+    yield from metrics
 
 
 @click.command(help="Collect tech debt hotspot stats for the given directory")
@@ -204,6 +214,7 @@ def parse_since(since: str | None) -> date | None:
     type=str,
     help="Analyze changes since the given date. Date's format is 'YYYY-MM-DD'",
 )
+@click.option("--deleted", "-d", is_flag=True, help="Includes deleted files from the analysis")
 @click.argument(
     "directory",
     type=click.Path(
@@ -215,10 +226,10 @@ def parse_since(since: str | None) -> date | None:
         path_type=Path,
     ),
 )
-def main(directory: Path, exclude: Sequence[Path], since: str | None) -> None:
+def main(directory: Path, exclude: Sequence[Path], deleted: bool, since: str | None) -> None:
     since_date = parse_since(since)
-
     exclude_set = set(exclude)
+
     maitainability_data = maintainability_index_iter(directory, exclude_set)
     changes_count_data = changes_count_iter(directory, exclude_set, since=since_date)
 
@@ -227,7 +238,9 @@ def main(directory: Path, exclude: Sequence[Path], since: str | None) -> None:
     update_maitainability_metrics(metrics, maitainability_data)
     update_changes_count_metrics(metrics, changes_count_data)
 
-    print_metrics(metrics)
+    metrics_iter = get_metrics_iter(metrics.values(), deleted)
+
+    print_metrics(metrics_iter)
 
 
 if __name__ == "__main__":

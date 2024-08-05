@@ -1,3 +1,4 @@
+import math
 import textwrap
 from datetime import date
 from pathlib import Path
@@ -16,6 +17,7 @@ from tech_debt_hotspot import (
     PathType,
     changes_count_iter,
     filename_parent_iter,
+    get_metrics_iter,
     get_path_type,
     is_excluded,
     maintainability_index_iter,
@@ -26,55 +28,85 @@ from tech_debt_hotspot import (
 )
 
 
-class TestPathMetricsHotspotIndex:
-    def test_normal_values(self) -> None:
-        # arrange
-        metrics = PathMetrics(
-            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=50, maintainability_index=80
+class TestPathMetrics:
+    class TestHotspotIndex:
+        def test_normal_values(self) -> None:
+            # arrange
+            metrics = PathMetrics(
+                path=ROOT_PATH,
+                path_type=PathType.PACKAGE,
+                changes_count=50,
+                maintainability_index=80,
+            )
+
+            # act & assert
+            assert metrics.hotspot_index == pytest.approx(62.5)
+
+        def test_zero_changes_count(self) -> None:
+            # arrange
+            metrics = PathMetrics(
+                path=ROOT_PATH,
+                path_type=PathType.PACKAGE,
+                changes_count=0,
+                maintainability_index=80,
+            )
+
+            # act & assert
+            assert metrics.hotspot_index == pytest.approx(0.0)
+
+        def test_zero_maintainability_index(self) -> None:
+            # arrange
+            metrics = PathMetrics(
+                path=ROOT_PATH,
+                path_type=PathType.PACKAGE,
+                changes_count=50,
+                maintainability_index=0,
+            )
+
+            # act & assert
+            with pytest.raises(ZeroDivisionError):
+                metrics.hotspot_index
+
+        @pytest.mark.parametrize(
+            "changes_count, maintainability_index, expected",
+            [
+                pytest.param(-50, 80, -62.5),
+                pytest.param(50, -80, -62.5),
+            ],
         )
+        def test_negative_values(
+            self, changes_count: int, maintainability_index: int, expected: float
+        ) -> None:
+            # arrange
+            metrics = PathMetrics(
+                path=ROOT_PATH,
+                path_type=PathType.PACKAGE,
+                changes_count=changes_count,
+                maintainability_index=maintainability_index,
+            )
 
-        # act & assert
-        assert metrics.hotspot_index == pytest.approx(62.5)
+            # act & assert
+            assert metrics.hotspot_index == pytest.approx(expected)
 
-    def test_zero_changes_count(self) -> None:
-        # arrange
-        metrics = PathMetrics(
-            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=0, maintainability_index=80
+    class TestIsDeleted:
+        @pytest.mark.parametrize(
+            "maintainability_index, expected",
+            [
+                pytest.param(math.inf, True),
+                pytest.param(100, False),
+                pytest.param(0, False),
+            ],
         )
+        def test_is_deleted(self, maintainability_index: float, expected: bool) -> None:
+            # arrange
+            hotspot = PathMetrics(
+                path=ROOT_PATH,
+                path_type=PathType.PACKAGE,
+                maintainability_index=maintainability_index,
+            )
 
-        # act & assert
-        assert metrics.hotspot_index == pytest.approx(0.0)
-
-    def test_zero_maintainability_index(self) -> None:
-        # arrange
-        metrics = PathMetrics(
-            path=ROOT_PATH, path_type=PathType.PACKAGE, changes_count=50, maintainability_index=0
-        )
-
-        # act & assert
-        with pytest.raises(ZeroDivisionError):
-            metrics.hotspot_index
-
-    @pytest.mark.parametrize(
-        "changes_count, maintainability_index, expected",
-        [
-            pytest.param(-50, 80, -62.5),
-            pytest.param(50, -80, -62.5),
-        ],
-    )
-    def test_negative_values(
-        self, changes_count: int, maintainability_index: int, expected: float
-    ) -> None:
-        # arrange
-        metrics = PathMetrics(
-            path=ROOT_PATH,
-            path_type=PathType.PACKAGE,
-            changes_count=changes_count,
-            maintainability_index=maintainability_index,
-        )
-
-        # act & assert
-        assert metrics.hotspot_index == pytest.approx(expected)
+            # act & assert
+            assert hotspot.is_deleted() == expected
 
 
 class TestMaitainabilityIndexIter:
@@ -446,14 +478,14 @@ class TestPrintMetrics:
         "metrics, expected",
         [
             pytest.param(
-                {
-                    Path("/a/b"): PathMetrics(
+                [
+                    PathMetrics(
                         path=Path("/a/b"),
                         path_type=PathType.MODULE,
                         maintainability_index=75.0,
                         changes_count=5,
                     )
-                },
+                ],
                 (
                     textwrap.dedent(
                         """
@@ -467,17 +499,14 @@ class TestPrintMetrics:
                 id="single_metric",
             ),
             pytest.param(
-                {},
+                [],
                 ["path,path_type,maintainability_index,changes_count,hotspot_index"],
                 id="empty_metrics",
             ),
         ],
     )
     def test_print_metrics(
-        self,
-        metrics: Mapping[Path, PathMetrics],
-        expected: Sequence[str],
-        capfd: pytest.CaptureFixture,
+        self, metrics: Sequence[PathMetrics], expected: Sequence[str], capfd: pytest.CaptureFixture
     ) -> None:
         # act
         print_metrics(metrics)
@@ -542,3 +571,55 @@ class TestParseSince:
         # Act & Assert
         with pytest.raises(click.BadParameter, match="Invalid date format. Use 'YYYY-MM-DD'"):
             parse_since(since)
+
+
+class TestGetMetricsIter:
+    @pytest.mark.parametrize(
+        "metrics, deleted, expected",
+        [
+            pytest.param(
+                [PathMetrics(path=ROOT_PATH, path_type=PathType.MODULE)],
+                False,
+                [],
+            ),
+            pytest.param(
+                [PathMetrics(path=ROOT_PATH, path_type=PathType.MODULE)],
+                True,
+                [PathMetrics(path=ROOT_PATH, path_type=PathType.MODULE)],
+            ),
+            pytest.param(
+                [
+                    PathMetrics(
+                        path=ROOT_PATH, path_type=PathType.MODULE, maintainability_index=75.0
+                    )
+                ],
+                False,
+                [
+                    PathMetrics(
+                        path=ROOT_PATH, path_type=PathType.MODULE, maintainability_index=75.0
+                    )
+                ],
+            ),
+            pytest.param(
+                [
+                    PathMetrics(
+                        path=ROOT_PATH, path_type=PathType.MODULE, maintainability_index=75.0
+                    )
+                ],
+                True,
+                [
+                    PathMetrics(
+                        path=ROOT_PATH, path_type=PathType.MODULE, maintainability_index=75.0
+                    )
+                ],
+            ),
+        ],
+    )
+    def test_get_metrics_iter(
+        self, metrics: Sequence[PathMetrics], deleted: bool, expected: Sequence[PathMetrics]
+    ) -> None:
+        # Act
+        actual = list(get_metrics_iter(metrics, deleted))
+
+        # Assert
+        assert actual == expected
