@@ -9,6 +9,7 @@ import click
 import pytest
 
 from tech_debt_hotspot import (
+    FIELDNAMES,
     MINIMUM_MAINTAINABILITY_INDEX,
     ROOT_PATH,
     FileChanges,
@@ -22,7 +23,8 @@ from tech_debt_hotspot import (
     is_excluded,
     maintainability_index_iter,
     parse_since,
-    print_metrics,
+    print_metrics_csv,
+    print_metrics_markdown,
     update_changes_count_metrics,
     update_maitainability_metrics,
 )
@@ -473,7 +475,7 @@ class TestUpdateChangesCountMetrics:
         assert metrics == expected
 
 
-class TestPrintMetrics:
+class TestPrintMetricsCsv:
     @pytest.mark.parametrize(
         "metrics, expected",
         [
@@ -505,11 +507,70 @@ class TestPrintMetrics:
             ),
         ],
     )
-    def test_print_metrics(
+    def test_print_metrics_csv(
         self, metrics: Sequence[PathMetrics], expected: Sequence[str], capfd: pytest.CaptureFixture
     ) -> None:
         # act
-        print_metrics(metrics)
+        print_metrics_csv(metrics)
+
+        # assert
+        actual = capfd.readouterr().out.splitlines()
+
+        assert actual == expected
+
+
+class TestPrintMetricsMarkdown:
+    @pytest.mark.parametrize(
+        "metrics, expected",
+        [
+            pytest.param(
+                [
+                    PathMetrics(
+                        path=Path("/a/b"),
+                        path_type=PathType.MODULE,
+                        maintainability_index=75.0,
+                        changes_count=5,
+                    )
+                ],
+                textwrap.dedent(
+                    """
+                        +------+-----------+-----------------------+---------------+-------------------+
+                        | path | path_type | maintainability_index | changes_count |     hotspot_index |
+                        +------+-----------+-----------------------+---------------+-------------------+
+                        | /a/b |    module |                  75.0 |             5 | 6.666666666666667 |
+                        +------+-----------+-----------------------+---------------+-------------------+
+                    """  # noqa: E501
+                )
+                .strip()
+                .splitlines(),
+                id="single_metric",
+            ),
+            pytest.param(
+                [],
+                textwrap.dedent(
+                    """
+                        +------+-----------+-----------------------+---------------+---------------+
+                        | path | path_type | maintainability_index | changes_count | hotspot_index |
+                        +------+-----------+-----------------------+---------------+---------------+
+                        +------+-----------+-----------------------+---------------+---------------+
+                    """  # noqa: E501
+                )
+                .strip()
+                .splitlines(),
+                id="empty_metrics",
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("field_name", FIELDNAMES)
+    def test_print_metrics_csv(
+        self,
+        metrics: Sequence[PathMetrics],
+        field_name: str,
+        expected: Sequence[str],
+        capfd: pytest.CaptureFixture,
+    ) -> None:
+        # act
+        print_metrics_markdown(metrics, field_name)
 
         # assert
         actual = capfd.readouterr().out.splitlines()

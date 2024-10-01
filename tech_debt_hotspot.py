@@ -14,10 +14,25 @@ import click
 import radon.metrics
 import sh
 from loguru import logger
+from prettytable import PrettyTable
 from tqdm import tqdm
 
 ROOT_PATH: Final = Path(".")
 MINIMUM_MAINTAINABILITY_INDEX: Final = 0.01
+
+FIELDNAMES: Final = [
+    "path",
+    "path_type",
+    "maintainability_index",
+    "changes_count",
+    "hotspot_index",
+]
+
+
+@unique
+class OutputType(Enum):
+    CSV = "csv"
+    MARKDOWN = "markdown"
 
 
 @unique
@@ -156,12 +171,10 @@ def update_changes_count_metrics(
             path_metrics.changes_count += changes_count.changes_count
 
 
-def print_metrics(metrics: Iterable[PathMetrics], /) -> None:
-    logger.info("Printing metrics to stdout ...")
+def print_metrics_csv(metrics: Iterable[PathMetrics], /) -> None:
+    logger.info("Rendering metrics to csv ...")
 
-    fieldnames = ["path", "path_type", "maintainability_index", "changes_count", "hotspot_index"]
-
-    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+    writer = csv.DictWriter(sys.stdout, fieldnames=FIELDNAMES)
     writer.writeheader()
 
     for metric in metrics:
@@ -174,6 +187,31 @@ def print_metrics(metrics: Iterable[PathMetrics], /) -> None:
                 "hotspot_index": metric.hotspot_index,
             }
         )
+
+
+def print_metrics_markdown(metrics: Iterable[PathMetrics], sort_by_field: str, /) -> None:
+    logger.info("Rendering metrics to Markdown ...")
+
+    table = PrettyTable()
+    table.field_names = FIELDNAMES
+    table.align = "r"
+    table.align["path"] = "l"  # type: ignore[index]
+    table.sortby = sort_by_field
+    table.reversesort = True
+
+    for metric in metrics:
+        table.add_row(
+            [
+                metric.path,
+                metric.path_type.value,
+                metric.maintainability_index,
+                metric.changes_count,
+                metric.hotspot_index,
+            ]
+        )
+
+    sys.stdout.write(str(table))
+    sys.stdout.write("\n")
 
 
 def parse_since(since: str | None) -> date | None:
@@ -215,6 +253,16 @@ def get_metrics_iter(metrics: Iterable[PathMetrics], deleted: bool, /) -> Iterab
     help="Analyze changes since the given date. Date's format is 'YYYY-MM-DD'",
 )
 @click.option("--deleted", "-d", is_flag=True, help="Includes deleted files from the analysis")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Choice([member.value for member in OutputType]),
+    default=OutputType.MARKDOWN.value,
+    help="Output format",
+)
+@click.option(
+    "--sort", type=click.Choice(FIELDNAMES), default="path", help="Sort by the given field"
+)
 @click.argument(
     "directory",
     type=click.Path(
@@ -226,7 +274,14 @@ def get_metrics_iter(metrics: Iterable[PathMetrics], deleted: bool, /) -> Iterab
         path_type=Path,
     ),
 )
-def main(directory: Path, exclude: Sequence[Path], deleted: bool, since: str | None) -> None:
+def main(
+    directory: Path,
+    exclude: Sequence[Path],
+    output: str,
+    deleted: bool,
+    sort: str,
+    since: str | None,
+) -> None:
     since_date = parse_since(since)
     exclude_set = set(exclude)
 
@@ -240,7 +295,14 @@ def main(directory: Path, exclude: Sequence[Path], deleted: bool, since: str | N
 
     metrics_iter = get_metrics_iter(metrics.values(), deleted)
 
-    print_metrics(metrics_iter)
+    output_type = OutputType(output)
+
+    if output_type == OutputType.CSV:
+        print_metrics_csv(metrics_iter)
+    elif output_type == OutputType.MARKDOWN:
+        print_metrics_markdown(metrics_iter, sort)
+    else:
+        raise ValueError(f"Unknown output type: {output_type}")
 
 
 if __name__ == "__main__":
