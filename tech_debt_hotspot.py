@@ -4,11 +4,12 @@ import csv
 import math
 import sys
 from collections import Counter
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum, unique
 from pathlib import Path
-from typing import Final, Iterable, Iterator, Sequence
+from typing import Final
 
 import click
 import radon.metrics
