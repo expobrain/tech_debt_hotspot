@@ -1,8 +1,9 @@
 import math
 import textwrap
+from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
-from typing import Dict, Mapping, Optional, Sequence, Set
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import click
@@ -131,7 +132,7 @@ class TestMaitainabilityIndexIter:
         mock_mi_visit.side_effect = [50, 30]
 
         directory = Path("/some/directory")
-        excluded: Set[Path] = set()
+        excluded: set[Path] = set()
 
         # act
         results = list(maintainability_index_iter(directory, excluded))
@@ -157,7 +158,7 @@ class TestMaitainabilityIndexIter:
         mock_mi_visit.return_value = 0
 
         directory = Path("/some/directory")
-        excluded: Set[Path] = set()
+        excluded: set[Path] = set()
 
         # act
         results = list(maintainability_index_iter(directory, excluded))
@@ -181,7 +182,7 @@ class TestChangesCountIter:
         mock_git.return_value = "file1.py\nfile2.py\nfile1.py\nfile3.py\n"
 
         directory = Path("/some/directory")
-        excluded: Set[Path] = set()
+        excluded: set[Path] = set()
 
         # act
         results = list(changes_count_iter(directory, excluded))
@@ -224,7 +225,7 @@ class TestChangesCountIter:
         mock_git.return_value = git_log_output
 
         directory = Path("/some/directory")
-        excluded: Set[Path] = set()
+        excluded: set[Path] = set()
 
         # act
         results = list(changes_count_iter(directory, excluded))
@@ -252,7 +253,7 @@ class TestChangesCountIter:
         self,
         mock_git: MagicMock,
         git_log_output: str,
-        exclude: Set[Path],
+        exclude: set[Path],
         expected: Sequence[FileChanges],
     ) -> None:
         # arrange
@@ -270,7 +271,7 @@ class TestChangesCountIter:
     def test_changes_count_iter_default_command(self, mock_git: MagicMock) -> None:
         # arrange
         directory = Path("/some/directory")
-        exclude: Set[Path] = set()
+        exclude: set[Path] = set()
 
         # act
         list(changes_count_iter(directory, exclude))
@@ -290,7 +291,7 @@ class TestChangesCountIter:
     def test_changes_count_iter_with_sice(self, mock_git: MagicMock) -> None:
         # arrange
         directory = Path("/some/directory")
-        exclude: Set[Path] = set()
+        exclude: set[Path] = set()
         since = date(2023, 10, 1)
 
         # act
@@ -403,7 +404,7 @@ class TestUpdateMaintainabilityMetrics:
     )
     def test_update_maitainability_metrics(
         self,
-        metrics: Dict[Path, PathMetrics],
+        metrics: dict[Path, PathMetrics],
         maintainability_data: Sequence[FileMaintainability],
         expected: Mapping[Path, PathMetrics],
     ) -> None:
@@ -464,7 +465,7 @@ class TestUpdateChangesCountMetrics:
     )
     def test_update_maitainability_metrics(
         self,
-        metrics: Dict[Path, PathMetrics],
+        metrics: dict[Path, PathMetrics],
         changes_count_data: Sequence[FileChanges],
         expected: Mapping[Path, PathMetrics],
     ) -> None:
@@ -597,7 +598,7 @@ class TestIsExcluded:
             pytest.param(Path("/a/b/c/"), {Path("/a/b/c/")}, True, id="matching_path"),
         ],
     )
-    def test_is_excluded(self, path: Path, excluded: Set[Path], expected: bool) -> None:
+    def test_is_excluded(self, path: Path, excluded: set[Path], expected: bool) -> None:
         # Act
         result = is_excluded(path, excluded)
 
