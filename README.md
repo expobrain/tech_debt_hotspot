@@ -32,14 +32,13 @@ Example of running the tool in its repository:
 
 ```bash
 $ tech-debt-hotspot .
-path,path_type,maintainability_index,changes_count,hotspot_index
-.,package,43.43358705155058,19,43.74494783829211
-tech_debt_hotspot.py,module,43.43358705155058,7,16.116559729897094
-tests/tech_debt_hotspot_test.py,module,50.34299353039042,3,5.959121199634261
-tests,package,50.34299353039042,6,11.918242399268522
-tests/__init__.py,module,100.0,1,1.0
-tests/dummy_test.py,module,inf,2,0.0
-tech_debt_hotspot/__init__.py,module,inf,2,0.0
-tech_debt_hotspot,package,inf,6,0.0
-tech_debt_hotspot/main.py,module,inf,4,0.0
++---------------------------------+-----------+-----------------------+---------------+--------------------+
+| path                            | path_type | maintainability_index | changes_count |      hotspot_index |
++---------------------------------+-----------+-----------------------+---------------+--------------------+
+| .                               |   package |      38.8587827245847 |            25 |  64.33552017619766 |
+| tech_debt_hotspot.py            |    module |      38.8587827245847 |            10 | 25.734208070479063 |
+| tests                           |   package |     48.11991142200354 |             9 | 18.703276323747797 |
+| tests/__init__.py               |    module |                 100.0 |             1 |                1.0 |
+| tests/tech_debt_hotspot_test.py |    module |     48.11991142200354 |             6 | 12.468850882498531 |
++---------------------------------+-----------+-----------------------+---------------+--------------------+
 ```
