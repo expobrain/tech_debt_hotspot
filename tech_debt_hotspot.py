@@ -28,6 +28,7 @@ FIELDNAMES: Final = [
     "changes_count",
     "hotspot_index",
 ]
+REVERSE_SORT_FIELDS: Final = {"maintainability_index", "changes_count", "hotspot_index"}
 
 
 @unique
@@ -198,7 +199,7 @@ def print_metrics_markdown(metrics: Iterable[PathMetrics], sort_by_field: str, /
     table.align = "r"
     table.align["path"] = "l"  # type: ignore[index]
     table.sortby = sort_by_field
-    table.reversesort = True
+    table.reversesort = sort_by_field in REVERSE_SORT_FIELDS
 
     for metric in metrics:
         table.add_row(
