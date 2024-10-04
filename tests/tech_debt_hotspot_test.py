@@ -492,9 +492,9 @@ class TestPrintMetricsCsv:
                 (
                     textwrap.dedent(
                         """
-                    path,path_type,maintainability_index,changes_count,hotspot_index
-                    /a/b,module,75.0,5,6.666666666666667
-                    """
+                        path,path_type,maintainability_index,changes_count,hotspot_index
+                        /a/b,module,75.0,5,6.666666666666667
+                        """
                     )
                     .strip()
                     .splitlines()
@@ -508,7 +508,7 @@ class TestPrintMetricsCsv:
             ),
         ],
     )
-    def test_print_metrics_csv(
+    def test_print_metrics(
         self, metrics: Sequence[PathMetrics], expected: Sequence[str], capfd: pytest.CaptureFixture
     ) -> None:
         # act
@@ -563,7 +563,7 @@ class TestPrintMetricsMarkdown:
         ],
     )
     @pytest.mark.parametrize("field_name", FIELDNAMES)
-    def test_print_metrics_csv(
+    def test_print_metrics(
         self,
         metrics: Sequence[PathMetrics],
         field_name: str,
