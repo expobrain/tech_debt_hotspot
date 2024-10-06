@@ -113,10 +113,11 @@ class TestPathMetrics:
 
 
 class TestMaitainabilityIndexIter:
-    @patch("tech_debt_hotspot.radon.metrics.mi_visit")
+    @patch("tech_debt_hotspot.radon.metrics.mi_parameters")
+    @patch("tech_debt_hotspot.radon.metrics.mi_compute")
     @patch("tech_debt_hotspot.Path.rglob")
     def test_maintainability_index_iter(
-        self, mock_rglob: MagicMock, mock_mi_visit: MagicMock
+        self, mock_rglob: MagicMock, mock_mi_compute: MagicMock, mock_mi_parameters: MagicMock
     ) -> None:
         # arrange
         mock_file1 = MagicMock(spec=Path)
@@ -129,7 +130,8 @@ class TestMaitainabilityIndexIter:
 
         mock_rglob.return_value = [mock_file1, mock_file2]
 
-        mock_mi_visit.side_effect = [50, 30]
+        mock_mi_parameters.return_value = [0, 0, 0, 0]
+        mock_mi_compute.side_effect = [50, 30]
 
         directory = Path("/some/directory")
         excluded: set[Path] = set()
@@ -147,10 +149,14 @@ class TestMaitainabilityIndexIter:
             ),
         ]
 
-    @patch("tech_debt_hotspot.radon.metrics.mi_visit")
+    @patch("tech_debt_hotspot.radon.metrics.mi_parameters")
+    @patch("tech_debt_hotspot.radon.metrics.mi_compute")
     @patch("tech_debt_hotspot.Path.rglob")
     def test_maintainability_index_below_minimum(
-        self, mock_rglob: MagicMock, mock_mi_visit: MagicMock
+        self,
+        mock_rglob: MagicMock,
+        mock_mi_compute: MagicMock,
+        mock_mi_parameters: MagicMock,
     ) -> None:
         # arrange
         mock_file = MagicMock(spec=Path)
@@ -159,7 +165,8 @@ class TestMaitainabilityIndexIter:
 
         mock_rglob.return_value = [mock_file]
 
-        mock_mi_visit.return_value = 0
+        mock_mi_parameters.return_value = [0, 0, 0, 0]
+        mock_mi_compute.return_value = 0
 
         directory = Path("/some/directory")
         excluded: set[Path] = set()
@@ -499,6 +506,10 @@ class TestPrintMetricsCsv:
                     PathMetrics(
                         path=Path("/a/b"),
                         path_type=PathType.MODULE,
+                        halsteads_volume=5.6,
+                        cyclomatic_complexity=1,
+                        loc=10,
+                        comments_percentage=30,
                         maintainability_index=75.0,
                         changes_count=5,
                     )
@@ -506,8 +517,8 @@ class TestPrintMetricsCsv:
                 (
                     textwrap.dedent(
                         """
-                        path,path_type,maintainability_index,changes_count,hotspot_index
-                        /a/b,module,75.0,5,6.666666666666667
+                        path,path_type,halsteads_volume,cyclomatic_complexity,loc,comments_percentage,maintainability_index,changes_count,hotspot_index
+                        /a/b,module,5.6,1,10,30,75.0,5,6.666666666666667
                         """
                     )
                     .strip()
@@ -517,7 +528,9 @@ class TestPrintMetricsCsv:
             ),
             pytest.param(
                 [],
-                ["path,path_type,maintainability_index,changes_count,hotspot_index"],
+                [
+                    "path,path_type,halsteads_volume,cyclomatic_complexity,loc,comments_percentage,maintainability_index,changes_count,hotspot_index"  # noqa: E501
+                ],
                 id="empty_metrics",
             ),
         ],
@@ -543,17 +556,21 @@ class TestPrintMetricsMarkdown:
                     PathMetrics(
                         path=Path("/a/b"),
                         path_type=PathType.MODULE,
+                        halsteads_volume=5.6,
+                        cyclomatic_complexity=1,
+                        loc=10,
+                        comments_percentage=30,
                         maintainability_index=75.0,
                         changes_count=5,
                     )
                 ],
                 textwrap.dedent(
                     """
-                        +------+-----------+-----------------------+---------------+-------------------+
-                        | path | path_type | maintainability_index | changes_count |     hotspot_index |
-                        +------+-----------+-----------------------+---------------+-------------------+
-                        | /a/b |    module |                  75.0 |             5 | 6.666666666666667 |
-                        +------+-----------+-----------------------+---------------+-------------------+
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+-------------------+
+                        | path | path_type | halsteads_volume | cyclomatic_complexity | loc | comments_percentage | maintainability_index | changes_count |     hotspot_index |
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+-------------------+
+                        | /a/b |    module |              5.6 |                     1 |  10 |                  30 |                  75.0 |             5 | 6.666666666666667 |
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+-------------------+
                     """  # noqa: E501
                 )
                 .strip()
@@ -564,10 +581,10 @@ class TestPrintMetricsMarkdown:
                 [],
                 textwrap.dedent(
                     """
-                        +------+-----------+-----------------------+---------------+---------------+
-                        | path | path_type | maintainability_index | changes_count | hotspot_index |
-                        +------+-----------+-----------------------+---------------+---------------+
-                        +------+-----------+-----------------------+---------------+---------------+
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+---------------+
+                        | path | path_type | halsteads_volume | cyclomatic_complexity | loc | comments_percentage | maintainability_index | changes_count | hotspot_index |
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+---------------+
+                        +------+-----------+------------------+-----------------------+-----+---------------------+-----------------------+---------------+---------------+
                     """  # noqa: E501
                 )
                 .strip()

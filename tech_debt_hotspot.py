@@ -21,15 +21,6 @@ from tqdm import tqdm
 ROOT_PATH: Final = Path(".")
 MINIMUM_MAINTAINABILITY_INDEX: Final = 0.01
 
-FIELDNAMES: Final = [
-    "path",
-    "path_type",
-    "maintainability_index",
-    "changes_count",
-    "hotspot_index",
-]
-REVERSE_SORT_FIELDS: Final = {"maintainability_index", "changes_count", "hotspot_index"}
-
 
 @unique
 class OutputType(Enum):
@@ -47,6 +38,10 @@ class PathType(Enum):
 class PathMetrics:
     path: Path
     path_type: PathType
+    halsteads_volume: float = 0
+    cyclomatic_complexity: int = 0
+    loc: int = 0
+    comments_percentage: float = 0
     maintainability_index: float = math.inf  # percentage from 0 to 100
     changes_count: int = 0
 
@@ -56,6 +51,9 @@ class PathMetrics:
 
     def is_deleted(self) -> bool:
         return self.maintainability_index == math.inf
+
+
+FIELDNAMES: Final = list(PathMetrics.__annotations__.keys()) + ["hotspot_index"]
 
 
 @dataclass(frozen=True)
@@ -82,7 +80,12 @@ def maintainability_index_iter(directory: Path, exclude: set[Path], /) -> Iterat
 
     for filename in tqdm(filenames, unit="file", desc="Processing files"):
         code = filename.read_text()
-        maintainability_index = radon.metrics.mi_visit(code, multi=True)
+        halsteads_volume, cyclomatic_complexity, loc, comments_percentage = (
+            radon.metrics.mi_parameters(code, count_multi=True)
+        )
+        maintainability_index = radon.metrics.mi_compute(
+            halsteads_volume, cyclomatic_complexity, loc, comments_percentage
+        )
 
         # We cannot have a 0% maintainability index so we set a very low number
         maintainability_index = max(MINIMUM_MAINTAINABILITY_INDEX, maintainability_index)
@@ -90,6 +93,10 @@ def maintainability_index_iter(directory: Path, exclude: set[Path], /) -> Iterat
         yield PathMetrics(
             path=filename.relative_to(directory),
             path_type=PathType.MODULE,
+            halsteads_volume=halsteads_volume,
+            cyclomatic_complexity=cyclomatic_complexity,
+            loc=loc,
+            comments_percentage=comments_percentage,
             maintainability_index=maintainability_index,
         )
 
@@ -140,18 +147,37 @@ def get_path_type(filename: Path, /) -> PathType:
 
 
 def update_maitainability_metrics(
-    metrics: dict[Path, PathMetrics], maitainability_data: Iterable[PathMetrics], /
+    metrics: dict[Path, PathMetrics], path_metrics_iter: Iterable[PathMetrics], /
 ) -> None:
     logger.info("Updating maintainability metrics ...")
 
-    for maitainability in maitainability_data:
-        for parent in filename_parent_iter(maitainability.path):
-            path_metric = metrics.setdefault(
+    for path_metrics in path_metrics_iter:
+        for parent in filename_parent_iter(path_metrics.path):
+            aggregated_metrics = metrics.setdefault(
                 parent, PathMetrics(path=parent, path_type=get_path_type(parent))
             )
-            path_metric.maintainability_index = min(
-                path_metric.maintainability_index, maitainability.maintainability_index
+
+            aggregated_metrics.halsteads_volume = max(
+                aggregated_metrics.halsteads_volume, path_metrics.halsteads_volume
             )
+            aggregated_metrics.cyclomatic_complexity = max(
+                aggregated_metrics.cyclomatic_complexity, path_metrics.cyclomatic_complexity
+            )
+            aggregated_metrics.loc += path_metrics.loc
+            # test me
+            aggregated_metrics.comments_percentage = (
+                (
+                    aggregated_metrics.comments_percentage * aggregated_metrics.loc
+                    + path_metrics.comments_percentage * path_metrics.loc
+                )
+                / (aggregated_metrics.loc + path_metrics.loc)
+                if (aggregated_metrics.loc + path_metrics.loc) > 0
+                else 0
+            )
+            aggregated_metrics.maintainability_index = min(
+                aggregated_metrics.maintainability_index, path_metrics.maintainability_index
+            )
+            aggregated_metrics.changes_count += path_metrics.changes_count
 
 
 def update_changes_count_metrics(
@@ -178,6 +204,10 @@ def print_metrics_csv(metrics: Iterable[PathMetrics], /) -> None:
             {
                 "path": metric.path,
                 "path_type": metric.path_type.value,
+                "halsteads_volume": metric.halsteads_volume,
+                "cyclomatic_complexity": metric.cyclomatic_complexity,
+                "loc": metric.loc,
+                "comments_percentage": metric.comments_percentage,
                 "maintainability_index": metric.maintainability_index,
                 "changes_count": metric.changes_count,
                 "hotspot_index": metric.hotspot_index,
@@ -193,13 +223,17 @@ def print_metrics_markdown(metrics: Iterable[PathMetrics], sort_by_field: str, /
     table.align = "r"
     table.align["path"] = "l"  # type: ignore[index]
     table.sortby = sort_by_field
-    table.reversesort = sort_by_field in REVERSE_SORT_FIELDS
+    table.reversesort = sort_by_field != "path"
 
     for metric in metrics:
         table.add_row(
             [
                 metric.path,
                 metric.path_type.value,
+                metric.halsteads_volume,
+                metric.cyclomatic_complexity,
+                metric.loc,
+                metric.comments_percentage,
                 metric.maintainability_index,
                 metric.changes_count,
                 metric.hotspot_index,
