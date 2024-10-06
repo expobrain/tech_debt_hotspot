@@ -263,7 +263,10 @@ def get_metrics_iter(metrics: Iterable[PathMetrics], deleted: bool, /) -> Iterab
     help="Output format",
 )
 @click.option(
-    "--sort", type=click.Choice(FIELDNAMES), default="path", help="Sort by the given field"
+    "--sort",
+    type=click.Choice(FIELDNAMES),
+    default="hotspot_index",
+    help="Sort by the given field",
 )
 @click.argument(
     "directory",
