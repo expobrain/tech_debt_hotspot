@@ -178,11 +178,7 @@ class TestMaitainabilityIndexIter:
 
 class TestChangesCountIter:
     @patch("tech_debt_hotspot.sh.git")
-    def test_changes_count_iter(
-        self,
-        # mock_resolve: MagicMock,
-        mock_git: MagicMock,
-    ) -> None:
+    def test_changes_count_iter(self, mock_git: MagicMock) -> None:
         # arrange
         mock_git.return_value = "file1.py\nfile2.py\nfile1.py\nfile3.py\n"
 
