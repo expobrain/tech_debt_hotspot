@@ -14,7 +14,6 @@ from tech_debt_hotspot import (
     MINIMUM_MAINTAINABILITY_INDEX,
     ROOT_PATH,
     FileChanges,
-    FileMaintainability,
     PathMetrics,
     PathType,
     changes_count_iter,
@@ -139,8 +138,12 @@ class TestMaitainabilityIndexIter:
 
         # assert
         assert results == [
-            FileMaintainability(path=Path("file1.py"), maitainability_index=50),
-            FileMaintainability(path=Path("file2.py"), maitainability_index=30),
+            PathMetrics(
+                path=Path("file1.py"), path_type=PathType.MODULE, maintainability_index=50
+            ),
+            PathMetrics(
+                path=Path("file2.py"), path_type=PathType.MODULE, maintainability_index=30
+            ),
         ]
 
     @patch("tech_debt_hotspot.radon.metrics.mi_visit")
@@ -165,8 +168,10 @@ class TestMaitainabilityIndexIter:
 
         # assert
         assert results == [
-            FileMaintainability(
-                path=Path("file.py"), maitainability_index=MINIMUM_MAINTAINABILITY_INDEX
+            PathMetrics(
+                path=Path("file.py"),
+                path_type=PathType.MODULE,
+                maintainability_index=MINIMUM_MAINTAINABILITY_INDEX,
             )
         ]
 
@@ -359,7 +364,13 @@ class TestUpdateMaintainabilityMetrics:
         "maintainability_data, expected",
         [
             pytest.param(
-                [FileMaintainability(path=Path("/a/b/c/file.py"), maitainability_index=70)],
+                [
+                    PathMetrics(
+                        path=Path("/a/b/c/file.py"),
+                        path_type=PathType.MODULE,
+                        maintainability_index=70,
+                    )
+                ],
                 {
                     Path("/"): PathMetrics(
                         path=Path("/"), path_type=PathType.PACKAGE, maintainability_index=70
@@ -405,7 +416,7 @@ class TestUpdateMaintainabilityMetrics:
     def test_update_maitainability_metrics(
         self,
         metrics: dict[Path, PathMetrics],
-        maintainability_data: Sequence[FileMaintainability],
+        maintainability_data: Sequence[PathMetrics],
         expected: Mapping[Path, PathMetrics],
     ) -> None:
         # act

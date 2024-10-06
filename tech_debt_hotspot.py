@@ -64,12 +64,6 @@ class FileChanges:
     changes_count: int
 
 
-@dataclass(frozen=True)
-class FileMaintainability:
-    path: Path
-    maitainability_index: float  # percentage from 0 to 100
-
-
 def is_excluded(path: Path, excluded: set[Path], /) -> bool:
     for excluded_path in excluded:
         try:
@@ -81,9 +75,7 @@ def is_excluded(path: Path, excluded: set[Path], /) -> bool:
     return False
 
 
-def maintainability_index_iter(
-    directory: Path, exclude: set[Path], /
-) -> Iterator[FileMaintainability]:
+def maintainability_index_iter(directory: Path, exclude: set[Path], /) -> Iterator[PathMetrics]:
     logger.info("Collecting maintainability indexes ...")
 
     filenames = [path for path in directory.rglob("*.py") if not is_excluded(path, exclude)]
@@ -95,8 +87,10 @@ def maintainability_index_iter(
         # We cannot have a 0% maintainability index so we set a very low number
         maintainability_index = max(MINIMUM_MAINTAINABILITY_INDEX, maintainability_index)
 
-        yield FileMaintainability(
-            path=filename.relative_to(directory), maitainability_index=maintainability_index
+        yield PathMetrics(
+            path=filename.relative_to(directory),
+            path_type=PathType.MODULE,
+            maintainability_index=maintainability_index,
         )
 
 
@@ -146,7 +140,7 @@ def get_path_type(filename: Path, /) -> PathType:
 
 
 def update_maitainability_metrics(
-    metrics: dict[Path, PathMetrics], maitainability_data: Iterable[FileMaintainability], /
+    metrics: dict[Path, PathMetrics], maitainability_data: Iterable[PathMetrics], /
 ) -> None:
     logger.info("Updating maintainability metrics ...")
 
@@ -156,7 +150,7 @@ def update_maitainability_metrics(
                 parent, PathMetrics(path=parent, path_type=get_path_type(parent))
             )
             path_metric.maintainability_index = min(
-                path_metric.maintainability_index, maitainability.maitainability_index
+                path_metric.maintainability_index, maitainability.maintainability_index
             )
 
 
