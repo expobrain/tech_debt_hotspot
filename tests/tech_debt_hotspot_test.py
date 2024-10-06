@@ -1,6 +1,7 @@
 import math
 import textwrap
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -403,7 +404,9 @@ class TestUpdateMaintainabilityMetrics:
             pytest.param(
                 {
                     Path("/a/b/c/file.py"): PathMetrics(
-                        path=Path("/a/b/c/file.py"), path_type=PathType.MODULE
+                        path=Path("/a/b/c/file.py"),
+                        path_type=PathType.MODULE,
+                        maintainability_index=70,
                     )
                 }
             ),
@@ -411,15 +414,19 @@ class TestUpdateMaintainabilityMetrics:
     )
     def test_update_maitainability_metrics(
         self,
-        metrics: dict[Path, PathMetrics],
+        metrics: Mapping[Path, PathMetrics],
         maintainability_data: Sequence[PathMetrics],
         expected: Mapping[Path, PathMetrics],
     ) -> None:
+        # arrange
+        # necessary because the function modifies the input
+        metrics_copy = deepcopy(dict(metrics))
+
         # act
-        update_maitainability_metrics(metrics, maintainability_data)
+        update_maitainability_metrics(metrics_copy, maintainability_data)
 
         # assert
-        assert metrics == expected
+        assert metrics_copy == expected
 
 
 class TestUpdateChangesCountMetrics:
