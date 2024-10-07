@@ -16,6 +16,7 @@ import radon.metrics
 import sh
 from loguru import logger
 from prettytable import PrettyTable
+from result import Err, Ok, Result
 from tqdm import tqdm
 
 ROOT_PATH: Final = Path(".")
@@ -244,14 +245,15 @@ def print_metrics_markdown(metrics: Iterable[PathMetrics], sort_by_field: str, /
     sys.stdout.write("\n")
 
 
-def parse_since(since: str | None) -> date | None:
+def parse_since(since: str | None) -> Result[date | None, str]:
     if since is None:
-        return None
+        return Ok(None)
 
     try:
-        return datetime.strptime(since, "%Y-%m-%d").date()
-    except ValueError as exc:
-        raise click.BadParameter("Invalid date format. Use 'YYYY-MM-DD'") from exc
+        return Ok(datetime.strptime(since, "%Y-%m-%d").date())
+    except ValueError:
+        return Err("Invalid date format. Use 'YYYY-MM-DD'")
+        # raise click.BadParameter("Invalid date format. Use 'YYYY-MM-DD'") from exc
 
 
 def get_metrics_iter(metrics: Iterable[PathMetrics], deleted: bool, /) -> Iterable[PathMetrics]:
@@ -315,7 +317,8 @@ def main(
     sort: str,
     since: str | None,
 ) -> None:
-    since_date = parse_since(since)
+    since_date = parse_since(since).unwrap_or_raise(click.ClickException)
+
     exclude_set = set(exclude)
 
     maitainability_data = maintainability_index_iter(directory, exclude_set)
