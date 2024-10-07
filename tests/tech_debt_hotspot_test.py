@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import click
 import pytest
+from result import is_err, is_ok
 
 from tech_debt_hotspot import (
     FIELDNAMES,
@@ -650,7 +650,8 @@ class TestParseSince:
         actual = parse_since(since)
 
         # Assert
-        assert actual == expected
+        assert is_ok(actual)
+        assert actual.unwrap() == expected
 
     @pytest.mark.parametrize(
         "since",
@@ -661,9 +662,12 @@ class TestParseSince:
         ],
     )
     def test_parse_since_fails_invalid(self, since: str) -> None:
-        # Act & Assert
-        with pytest.raises(click.BadParameter, match="Invalid date format. Use 'YYYY-MM-DD'"):
-            parse_since(since)
+        # act
+        actual = parse_since(since)
+
+        # assert
+        assert is_err(actual)
+        assert actual.unwrap_err() == "Invalid date format. Use 'YYYY-MM-DD'"
 
 
 class TestGetMetricsIter:
