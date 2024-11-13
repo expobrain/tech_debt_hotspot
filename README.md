@@ -12,7 +12,7 @@ This tools collects the maitainability index and the number of changes in the re
 - **path_type**: the type of the path (module or package)
 - **maintainability_index**: the maintainability index of the module or package calulated by `radon` (see https://radon.readthedocs.io/en/latest/intro.html#maintainability-index)
 - **changes**: the number of changes in the module or package from the version control
-- **hotspot_score**: the product of the maintainability index and the number of changes
+- **hotspot_score**: the inverse of the number of changes over the maintainability index
 
 ## Installation
 
