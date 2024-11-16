@@ -1,0 +1,10 @@
+[package]
+name = "tech_debt_hotspot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.21", features = ["cargo"] }
+rust-code-analysis = "<0.0.25"
+rustpython-parser = "0.4.0"
+tabled = "0.16.0"
