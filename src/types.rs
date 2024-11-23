@@ -25,7 +25,7 @@ pub struct FileStats {
     pub path_type: PathType,
     pub halstead_volume: f64,
     pub cyclomatic_complexity: f64,
-    pub loc: f64,
+    pub loc: u32,
     pub comments_percentage: f64,
     pub maitainability_index: f64,
     pub changes_count: u32,

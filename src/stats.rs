@@ -14,7 +14,7 @@ fn get_stats_from_path(path: &Path) -> Result<Option<FileStats>, String> {
         path_type: PathType::File,
         halstead_volume: s.metrics.halstead.volume(),
         cyclomatic_complexity: s.metrics.cyclomatic.cyclomatic_max(),
-        loc: s.metrics.loc.sloc(),
+        loc: s.metrics.loc.sloc() as u32,
         comments_percentage: s.metrics.loc.cloc() / s.metrics.loc.sloc() * 100.0,
         maitainability_index: s.metrics.mi.mi_visual_studio(),
         ..Default::default()
@@ -133,11 +133,12 @@ pub fn update_stats_from_filename(filename: &Path, stats: &mut HashMap<PathBuf, 
                         .max(file_stats_data.cyclomatic_complexity);
                     existing.loc += file_stats_data.loc;
                     existing.comments_percentage = match existing.loc + file_stats_data.loc {
-                        0.0 => 0.0,
+                        0 => 0.0,
                         _ => {
-                            (existing.comments_percentage * existing.loc
-                                + file_stats_data.comments_percentage * file_stats_data.loc)
-                                / (existing.loc + file_stats_data.loc)
+                            (existing.comments_percentage * f64::from(existing.loc)
+                                + file_stats_data.comments_percentage
+                                    * f64::from(file_stats_data.loc))
+                                / f64::from(existing.loc + file_stats_data.loc)
                         }
                     };
                     existing.maitainability_index = existing
