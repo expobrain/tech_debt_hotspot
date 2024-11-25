@@ -50,6 +50,8 @@ impl HotstpoStats {
 
 #[derive(Default)]
 pub struct TechDebtHotspots {
+    git_base_path: PathBuf,
+    path: PathBuf,
     stats: HashMap<PathBuf, FileStats>,
 }
 
@@ -57,27 +59,29 @@ impl TechDebtHotspots {
     pub fn new() -> Self {
         TechDebtHotspots::default()
     }
+
     pub fn stats(&self) -> Vec<HotstpoStats> {
         self.stats.values().map(HotstpoStats::new).collect()
     }
 
-    pub fn collect(&mut self, path: &Path) {
-        self.collect_filenames(path)
+    pub fn collect(&mut self, directory: &Path) {
+        self.path = directory.to_path_buf();
+        self.git_base_path = Self::get_git_base_path(directory);
+
+        self.collect_filenames()
             .get_stats_from_filenames()
-            .collect_changes_count(path)
-            .compute_directory_stats(path)
-            .normalise_to_git_root(path);
+            .collect_changes_count()
+            .compute_directory_stats()
+            .normalise_to_git_root();
     }
 
-    fn compute_directory_stats(&mut self, path: &Path) -> &mut Self {
-        let root_path = Self::get_git_base_path(path);
-
+    fn compute_directory_stats(&mut self) -> &mut Self {
         for (path, file_stats) in self.stats.clone().iter() {
             let mut paths_to_visit = vec![path.parent().unwrap()];
 
             match paths_to_visit.pop() {
                 None => {}
-                Some(path) if path == root_path => {}
+                Some(path) if path == self.git_base_path => {}
                 Some(path) => {
                     paths_to_visit.push(path.parent().unwrap());
 
@@ -124,8 +128,8 @@ impl TechDebtHotspots {
         self
     }
 
-    fn collect_filenames(&mut self, path: &Path) -> &mut Self {
-        let mut paths_to_visit = vec![path.to_path_buf()];
+    fn collect_filenames(&mut self) -> &mut Self {
+        let mut paths_to_visit = vec![self.path.clone()];
 
         while let Some(current_path) = paths_to_visit.pop() {
             match current_path.is_dir() {
@@ -152,9 +156,9 @@ impl TechDebtHotspots {
         self
     }
 
-    pub fn collect_changes_count(&mut self, path: &Path) -> &mut Self {
+    pub fn collect_changes_count(&mut self) -> &mut Self {
         let output = Command::new("git")
-            .current_dir(path)
+            .current_dir(self.path.clone())
             .arg("log")
             .arg("--name-only")
             .arg("--pretty=format:")
@@ -175,11 +179,10 @@ impl TechDebtHotspots {
             .map_err(|e| format!("Failed to parse git output: {}", e))
             .unwrap();
         let lines = stdout.lines().filter(|line| !line.trim().is_empty());
-        let repo_base_path = Self::get_git_base_path(path);
 
         for line in lines {
             let filename_path = PathBuf::from(line);
-            let absolute_path = repo_base_path.join(&filename_path);
+            let absolute_path = self.git_base_path.join(&filename_path);
 
             if !absolute_path.exists() {
                 continue;
@@ -218,12 +221,10 @@ impl TechDebtHotspots {
         };
     }
 
-    fn normalise_to_git_root(&mut self, path: &Path) -> &mut Self {
-        let repo_base_path = Self::get_git_base_path(path);
-
+    fn normalise_to_git_root(&mut self) -> &mut Self {
         for (_, file_stats) in self.stats.iter_mut() {
             let path = Path::new(&file_stats.path).to_path_buf();
-            let relative_path = path.strip_prefix(&repo_base_path).unwrap();
+            let relative_path = path.strip_prefix(&self.git_base_path).unwrap();
             file_stats.path = relative_path.to_path_buf();
         }
 
