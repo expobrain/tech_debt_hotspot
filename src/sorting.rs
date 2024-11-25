@@ -1,6 +1,6 @@
 use clap::{builder::PossibleValue, ValueEnum};
 
-use crate::hotspot::FileStats;
+use crate::hotspot::HotstpoStats;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SortBy {
@@ -11,6 +11,7 @@ pub enum SortBy {
     LinesOfCode,
     CommentsPercentage,
     ChangesCount,
+    HotspotIndex,
 }
 
 // Can also be derived with feature flag `derive`
@@ -24,6 +25,7 @@ impl ValueEnum for SortBy {
             SortBy::LinesOfCode,
             SortBy::CommentsPercentage,
             SortBy::ChangesCount,
+            SortBy::HotspotIndex,
         ]
     }
 
@@ -48,11 +50,14 @@ impl ValueEnum for SortBy {
             SortBy::ChangesCount => {
                 PossibleValue::new("changes_count").help("Sort by changes count")
             }
+            SortBy::HotspotIndex => {
+                PossibleValue::new("hotspot_index").help("Sort by hotspot index")
+            }
         })
     }
 }
 
-pub fn sort_stats_by(mut stats: Vec<&FileStats>, sort_by: SortBy) -> Vec<&FileStats> {
+pub fn sort_stats_by(mut stats: Vec<HotstpoStats>, sort_by: SortBy) -> Vec<HotstpoStats> {
     match sort_by {
         SortBy::Path => {
             stats.sort_unstable_by(|a, b| a.path.cmp(&b.path));
@@ -96,6 +101,13 @@ pub fn sort_stats_by(mut stats: Vec<&FileStats>, sort_by: SortBy) -> Vec<&FileSt
             stats.sort_unstable_by(|a, b| {
                 b.changes_count
                     .partial_cmp(&a.changes_count)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        SortBy::HotspotIndex => {
+            stats.sort_unstable_by(|a, b| {
+                b.hotspot_index
+                    .partial_cmp(&a.hotspot_index)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         }

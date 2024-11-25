@@ -6,7 +6,7 @@ mod types;
 use std::path::PathBuf;
 
 use clap::{arg, command, value_parser};
-use hotspot::HotspotStats;
+use hotspot::TechDebtHotspots;
 use sorting::{sort_stats_by, SortBy};
 
 fn main() {
@@ -33,7 +33,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut hotspot_stats = HotspotStats::new();
+    let mut hotspot_stats = TechDebtHotspots::new();
     hotspot_stats.collect(&directory);
 
     let stats = sort_stats_by(hotspot_stats.stats(), sort_by);

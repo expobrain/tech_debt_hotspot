@@ -7,9 +7,9 @@ use tabled::Tabled;
 
 use crate::types::PathType;
 
-#[derive(Debug, Tabled, Clone, Default)]
-pub struct FileStats {
-    pub path: String,
+#[derive(Clone, Default)]
+struct FileStats {
+    pub path: PathBuf,
     pub path_type: PathType,
     pub halstead_volume: f64,
     pub cyclomatic_complexity: f64,
@@ -19,17 +19,46 @@ pub struct FileStats {
     pub changes_count: u32,
 }
 
+#[derive(Tabled)]
+pub struct HotstpoStats {
+    pub path: String,
+    pub path_type: PathType,
+    pub halstead_volume: f64,
+    pub cyclomatic_complexity: f64,
+    pub loc: u32,
+    pub comments_percentage: f64,
+    pub maitainability_index: f64,
+    pub changes_count: u32,
+    pub hotspot_index: f64,
+}
+
+impl HotstpoStats {
+    fn new(file_stats: &FileStats) -> HotstpoStats {
+        HotstpoStats {
+            path: file_stats.path.display().to_string(),
+            path_type: file_stats.path_type.clone(),
+            halstead_volume: file_stats.halstead_volume,
+            cyclomatic_complexity: file_stats.cyclomatic_complexity,
+            loc: file_stats.loc,
+            comments_percentage: file_stats.comments_percentage,
+            maitainability_index: file_stats.maitainability_index,
+            changes_count: file_stats.changes_count,
+            hotspot_index: file_stats.changes_count as f64 / file_stats.maitainability_index,
+        }
+    }
+}
+
 #[derive(Default)]
-pub struct HotspotStats {
+pub struct TechDebtHotspots {
     stats: HashMap<PathBuf, FileStats>,
 }
 
-impl HotspotStats {
+impl TechDebtHotspots {
     pub fn new() -> Self {
-        HotspotStats::default()
+        TechDebtHotspots::default()
     }
-    pub fn stats(&self) -> Vec<&FileStats> {
-        self.stats.values().collect::<Vec<_>>()
+    pub fn stats(&self) -> Vec<HotstpoStats> {
+        self.stats.values().map(HotstpoStats::new).collect()
     }
 
     pub fn collect(&mut self, path: &Path) {
@@ -56,7 +85,7 @@ impl HotspotStats {
                         self.stats
                             .entry(path.to_path_buf())
                             .or_insert_with(|| FileStats {
-                                path: path.to_string_lossy().to_string(),
+                                path: path.to_path_buf(),
                                 path_type: PathType::Directory,
                                 ..Default::default()
                             });
@@ -110,7 +139,7 @@ impl HotspotStats {
                     self.stats.insert(
                         current_path.to_path_buf(),
                         FileStats {
-                            path: current_path.to_string_lossy().to_string(),
+                            path: current_path,
                             path_type: PathType::File,
                             ..Default::default()
                         },
@@ -179,7 +208,7 @@ impl HotspotStats {
         let parser = PythonParser::new(source_code, &path, None);
 
         if let Some(s) = metrics(&parser, &path) {
-            file_stats.path = path.to_string_lossy().to_string();
+            file_stats.path = path;
             file_stats.path_type = PathType::File;
             file_stats.halstead_volume = s.metrics.halstead.volume();
             file_stats.cyclomatic_complexity = s.metrics.cyclomatic.cyclomatic_max();
@@ -195,7 +224,7 @@ impl HotspotStats {
         for (_, file_stats) in self.stats.iter_mut() {
             let path = Path::new(&file_stats.path).to_path_buf();
             let relative_path = path.strip_prefix(&repo_base_path).unwrap();
-            file_stats.path = relative_path.to_string_lossy().to_string();
+            file_stats.path = relative_path.to_path_buf();
         }
 
         self
