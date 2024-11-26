@@ -5,6 +5,7 @@ mod types;
 
 use std::path::{Path, PathBuf};
 
+use chrono::NaiveDate;
 use clap::{arg, command, value_parser};
 use hotspot::TechDebtHotspots;
 use sorting::{sort_stats_by, SortBy};
@@ -29,8 +30,9 @@ fn main() -> Result<(), String> {
                 .required(true)
                 .value_parser(value_parser!(PathBuf)),
         )
-        .arg(arg!(-s --sort <SORT>).value_parser(value_parser!(SortBy)))
-        .arg(arg!(-e --exclude <EXCLUDE>).value_parser(value_parser!(PathBuf)))
+        .arg(arg!(--sort <SORT>).value_parser(value_parser!(SortBy)))
+        .arg(arg!(--exclude <EXCLUDE>).value_parser(value_parser!(PathBuf)))
+        .arg(arg!(--since <SINCE>).value_parser(value_parser!(chrono::NaiveDate)))
         .get_matches();
 
     let directory = matches
@@ -41,12 +43,13 @@ fn main() -> Result<(), String> {
         .get_one::<PathBuf>("exclude")
         .map(|path| to_canonicalised_path_buf(path))
         .transpose()?;
+    let since = matches.get_one::<NaiveDate>("since");
     let sort_by = *matches
         .get_one::<SortBy>("sort")
         .unwrap_or(&SortBy::MaintainabilityIndex);
 
     let mut hotspot_stats = TechDebtHotspots::new();
-    hotspot_stats.collect(&directory, exclude.as_deref());
+    hotspot_stats.collect(&directory, exclude.as_deref(), since);
 
     let stats = sort_stats_by(hotspot_stats.stats(), sort_by);
     let table = formatting::format_markdown(&stats);

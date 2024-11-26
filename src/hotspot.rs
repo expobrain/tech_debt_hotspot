@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use core::panic;
 use rust_code_analysis::ParserTrait;
 use rust_code_analysis::{metrics, PythonParser};
@@ -53,6 +54,7 @@ pub struct TechDebtHotspots {
     git_base_path: PathBuf,
     path: PathBuf,
     exclude: Option<PathBuf>,
+    since: Option<NaiveDate>,
     stats: HashMap<PathBuf, FileStats>,
 }
 
@@ -65,9 +67,10 @@ impl TechDebtHotspots {
         self.stats.values().map(HotstpoStats::new).collect()
     }
 
-    pub fn collect(&mut self, directory: &Path, exclude: Option<&Path>) {
+    pub fn collect(&mut self, directory: &Path, exclude: Option<&Path>, since: Option<&NaiveDate>) {
         self.path = directory.to_path_buf();
         self.exclude = exclude.map(|p| p.to_path_buf());
+        self.since = since.cloned();
         self.git_base_path = Self::get_git_base_path(directory);
 
         self.collect_filenames()
@@ -165,11 +168,19 @@ impl TechDebtHotspots {
     }
 
     pub fn collect_changes_count(&mut self) -> &mut Self {
-        let output = Command::new("git")
+        let mut command = Command::new("git");
+
+        command
             .current_dir(self.path.clone())
             .arg("log")
             .arg("--name-only")
-            .arg("--pretty=format:")
+            .arg("--pretty=format:");
+
+        if let Some(since) = self.since {
+            command.arg(format!("--since={}", since));
+        }
+
+        let output = command
             .arg(".")
             .output()
             .map_err(|e| format!("Failed to execute git command: {}", e))
