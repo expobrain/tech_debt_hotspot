@@ -52,6 +52,7 @@ impl HotstpoStats {
 pub struct TechDebtHotspots {
     git_base_path: PathBuf,
     path: PathBuf,
+    exclude: Option<PathBuf>,
     stats: HashMap<PathBuf, FileStats>,
 }
 
@@ -64,8 +65,9 @@ impl TechDebtHotspots {
         self.stats.values().map(HotstpoStats::new).collect()
     }
 
-    pub fn collect(&mut self, directory: &Path) {
+    pub fn collect(&mut self, directory: &Path, exclude: Option<&Path>) {
         self.path = directory.to_path_buf();
+        self.exclude = exclude.map(|p| p.to_path_buf());
         self.git_base_path = Self::get_git_base_path(directory);
 
         self.collect_filenames()
@@ -132,6 +134,12 @@ impl TechDebtHotspots {
         let mut paths_to_visit = vec![self.path.clone()];
 
         while let Some(current_path) = paths_to_visit.pop() {
+            if let Some(ref exclude) = self.exclude {
+                if current_path.starts_with(exclude) {
+                    continue;
+                }
+            }
+
             match current_path.is_dir() {
                 true => {
                     current_path.read_dir().unwrap().for_each(|entry| {
