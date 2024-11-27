@@ -3,10 +3,14 @@ mod hotspot;
 mod sorting;
 mod types;
 
-use std::path::{Path, PathBuf};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 
 use chrono::NaiveDate;
 use clap::{arg, command, value_parser};
+use formatting::{Output, OutputFormat};
 use hotspot::TechDebtHotspots;
 use sorting::{sort_stats_by, SortBy};
 
@@ -23,7 +27,7 @@ fn to_canonicalised_path_buf(path: &Path) -> Result<PathBuf, String> {
     Ok(canonicalised_path)
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = command!("tech_debt_hotspot")
         .arg(
             arg!(<DIRECTORY>)
@@ -33,6 +37,7 @@ fn main() -> Result<(), String> {
         .arg(arg!(--sort <SORT>).value_parser(value_parser!(SortBy)))
         .arg(arg!(--exclude <EXCLUDE>).value_parser(value_parser!(PathBuf)))
         .arg(arg!(--since <SINCE>).value_parser(value_parser!(chrono::NaiveDate)))
+        .arg(arg!(-o --output <OUTPUT>).value_parser(value_parser!(OutputFormat)))
         .get_matches();
 
     let directory = matches
@@ -47,14 +52,17 @@ fn main() -> Result<(), String> {
     let sort_by = *matches
         .get_one::<SortBy>("sort")
         .unwrap_or(&SortBy::MaintainabilityIndex);
+    let output_format = *matches
+        .get_one::<OutputFormat>("output")
+        .unwrap_or(&OutputFormat::Markdown);
 
     let mut hotspot_stats = TechDebtHotspots::new();
     hotspot_stats.collect(&directory, exclude.as_deref(), since);
 
     let stats = sort_stats_by(hotspot_stats.stats(), sort_by);
-    let table = formatting::format_markdown(&stats);
+    let output = Output::new(&output_format).format(&stats)?;
 
-    println!("{}", table);
+    println!("{}", output);
 
     Ok(())
 }

@@ -14,7 +14,6 @@ pub enum SortBy {
     HotspotIndex,
 }
 
-// Can also be derived with feature flag `derive`
 impl ValueEnum for SortBy {
     fn value_variants<'a>() -> &'a [Self] {
         &[
