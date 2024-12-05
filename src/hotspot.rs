@@ -16,7 +16,7 @@ struct FileStats {
     pub cyclomatic_complexity: f64,
     pub loc: u32,
     pub comments_percentage: f64,
-    pub maitainability_index: f64,
+    pub maintainability_index: f64,
     pub changes_count: u32,
 }
 
@@ -28,7 +28,7 @@ pub struct HotstpoStats {
     pub cyclomatic_complexity: f64,
     pub loc: u32,
     pub comments_percentage: f64,
-    pub maitainability_index: f64,
+    pub maintainability_index: f64,
     pub changes_count: u32,
     pub hotspot_index: f64,
 }
@@ -42,9 +42,9 @@ impl HotstpoStats {
             cyclomatic_complexity: file_stats.cyclomatic_complexity,
             loc: file_stats.loc,
             comments_percentage: file_stats.comments_percentage,
-            maitainability_index: file_stats.maitainability_index,
+            maintainability_index: file_stats.maintainability_index,
             changes_count: file_stats.changes_count,
-            hotspot_index: file_stats.changes_count as f64 / file_stats.maitainability_index,
+            hotspot_index: file_stats.changes_count as f64 / file_stats.maintainability_index,
         }
     }
 }
@@ -121,9 +121,9 @@ impl TechDebtHotspots {
                                 / (directory_stats.loc + file_stats.loc) as f64
                         }
                     };
-                    directory_stats.maitainability_index = f64::min(
-                        directory_stats.maitainability_index,
-                        file_stats.maitainability_index,
+                    directory_stats.maintainability_index = f64::min(
+                        directory_stats.maintainability_index,
+                        file_stats.maintainability_index,
                     );
                     directory_stats.changes_count += file_stats.changes_count;
                 }
@@ -236,7 +236,7 @@ impl TechDebtHotspots {
             file_stats.cyclomatic_complexity = s.metrics.cyclomatic.cyclomatic_max();
             file_stats.loc = s.metrics.loc.sloc() as u32;
             file_stats.comments_percentage = s.metrics.loc.cloc() / s.metrics.loc.sloc() * 100.0;
-            file_stats.maitainability_index = s.metrics.mi.mi_visual_studio();
+            file_stats.maintainability_index = s.metrics.mi.mi_visual_studio();
         };
     }
 

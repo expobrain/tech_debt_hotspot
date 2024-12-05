@@ -54,7 +54,7 @@ impl Output {
             "cyclomatic_complexity",
             "loc",
             "comments_percentage",
-            "maitainability_index",
+            "maintainability_index",
             "changes_count",
             "hotspot_index",
         ])?;
@@ -68,7 +68,7 @@ impl Output {
                     stat.cyclomatic_complexity.to_string(),
                     stat.loc.to_string(),
                     stat.comments_percentage.to_string(),
-                    stat.maitainability_index.to_string(),
+                    stat.maintainability_index.to_string(),
                     stat.changes_count.to_string(),
                     stat.hotspot_index.to_string(),
                 ])

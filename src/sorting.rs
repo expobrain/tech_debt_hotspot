@@ -63,8 +63,8 @@ pub fn sort_stats_by(mut stats: Vec<HotstpoStats>, sort_by: SortBy) -> Vec<Hotst
         }
         SortBy::MaintainabilityIndex => {
             stats.sort_unstable_by(|a, b| {
-                b.maitainability_index
-                    .partial_cmp(&a.maitainability_index)
+                b.maintainability_index
+                    .partial_cmp(&a.maintainability_index)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         }
