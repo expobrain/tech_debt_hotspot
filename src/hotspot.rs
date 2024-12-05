@@ -44,7 +44,8 @@ impl HotstpoStats {
             comments_percentage: file_stats.comments_percentage,
             maintainability_index: file_stats.maintainability_index,
             changes_count: file_stats.changes_count,
-            hotspot_index: file_stats.changes_count as f64 / file_stats.maintainability_index,
+            hotspot_index: file_stats.changes_count as f64
+                / (file_stats.maintainability_index / 100.0),
         }
     }
 }
