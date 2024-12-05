@@ -1,7 +1,6 @@
 mod formatting;
 mod hotspot;
 mod sorting;
-mod types;
 
 use std::{
     error::Error,

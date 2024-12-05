@@ -63,7 +63,6 @@ impl Output {
             writer
                 .serialize(&[
                     stat.path.clone(),
-                    stat.path_type.to_string(),
                     stat.halstead_volume.to_string(),
                     stat.cyclomatic_complexity.to_string(),
                     stat.loc.to_string(),

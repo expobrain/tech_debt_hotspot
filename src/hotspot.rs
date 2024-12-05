@@ -6,12 +6,9 @@ use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, process::Command};
 use tabled::Tabled;
 
-use crate::types::PathType;
-
 #[derive(Clone, Default)]
 struct FileStats {
     pub path: PathBuf,
-    pub path_type: PathType,
     pub halstead_volume: f64,
     pub cyclomatic_complexity: f64,
     pub loc: u32,
@@ -23,7 +20,6 @@ struct FileStats {
 #[derive(Tabled)]
 pub struct HotstpoStats {
     pub path: String,
-    pub path_type: PathType,
     pub halstead_volume: f64,
     pub cyclomatic_complexity: f64,
     pub loc: u32,
@@ -37,7 +33,6 @@ impl HotstpoStats {
     fn new(file_stats: &FileStats) -> HotstpoStats {
         HotstpoStats {
             path: file_stats.path.display().to_string(),
-            path_type: file_stats.path_type.clone(),
             halstead_volume: file_stats.halstead_volume,
             cyclomatic_complexity: file_stats.cyclomatic_complexity,
             loc: file_stats.loc,
@@ -77,61 +72,7 @@ impl TechDebtHotspots {
         self.collect_filenames()
             .get_stats_from_filenames()
             .collect_changes_count()
-            .compute_directory_stats()
             .normalise_to_git_root();
-    }
-
-    fn compute_directory_stats(&mut self) -> &mut Self {
-        for (path, file_stats) in self.stats.clone().iter() {
-            let mut paths_to_visit = vec![path.parent().unwrap()];
-
-            match paths_to_visit.pop() {
-                None => {}
-                Some(path) if path == self.git_base_path => {}
-                Some(path) => {
-                    paths_to_visit.push(path.parent().unwrap());
-
-                    let directory_stats =
-                        self.stats
-                            .entry(path.to_path_buf())
-                            .or_insert_with(|| FileStats {
-                                path: path.to_path_buf(),
-                                path_type: PathType::Directory,
-                                ..Default::default()
-                            });
-
-                    directory_stats.halstead_volume = match file_stats.halstead_volume.is_nan() {
-                        true => directory_stats.halstead_volume,
-                        false => directory_stats.halstead_volume + file_stats.halstead_volume,
-                    };
-                    directory_stats.cyclomatic_complexity =
-                        match file_stats.cyclomatic_complexity.is_nan() {
-                            true => directory_stats.cyclomatic_complexity,
-                            false => {
-                                directory_stats.cyclomatic_complexity
-                                    + file_stats.cyclomatic_complexity
-                            }
-                        };
-                    directory_stats.loc += file_stats.loc;
-                    directory_stats.comments_percentage = match directory_stats.loc + file_stats.loc
-                    {
-                        0 => 0.0,
-                        _ => {
-                            (directory_stats.comments_percentage * directory_stats.loc as f64
-                                + file_stats.comments_percentage * file_stats.loc as f64)
-                                / (directory_stats.loc + file_stats.loc) as f64
-                        }
-                    };
-                    directory_stats.maintainability_index = f64::min(
-                        directory_stats.maintainability_index,
-                        file_stats.maintainability_index,
-                    );
-                    directory_stats.changes_count += file_stats.changes_count;
-                }
-            }
-        }
-
-        self
     }
 
     fn collect_filenames(&mut self) -> &mut Self {
@@ -156,7 +97,6 @@ impl TechDebtHotspots {
                         current_path.to_path_buf(),
                         FileStats {
                             path: current_path,
-                            path_type: PathType::File,
                             ..Default::default()
                         },
                     );
@@ -247,7 +187,6 @@ impl TechDebtHotspots {
             }
 
             file_stats.path = path;
-            file_stats.path_type = PathType::File;
             file_stats.cyclomatic_complexity = s.metrics.cyclomatic.cyclomatic_max();
             file_stats.loc = sloc as u32;
         };
