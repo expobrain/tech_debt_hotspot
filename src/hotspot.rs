@@ -231,13 +231,25 @@ impl TechDebtHotspots {
         let parser = PythonParser::new(source_code, &path, None);
 
         if let Some(s) = metrics(&parser, &path) {
+            let sloc = s.metrics.loc.sloc();
+
+            match sloc {
+                0.0 => {
+                    file_stats.maintainability_index = 100.0;
+                    file_stats.comments_percentage = 0.0;
+                    file_stats.halstead_volume = 0.0;
+                }
+                _ => {
+                    file_stats.maintainability_index = s.metrics.mi.mi_visual_studio();
+                    file_stats.comments_percentage = s.metrics.loc.cloc() / sloc * 100.0;
+                    file_stats.halstead_volume = s.metrics.halstead.volume();
+                }
+            }
+
             file_stats.path = path;
             file_stats.path_type = PathType::File;
-            file_stats.halstead_volume = s.metrics.halstead.volume();
             file_stats.cyclomatic_complexity = s.metrics.cyclomatic.cyclomatic_max();
-            file_stats.loc = s.metrics.loc.sloc() as u32;
-            file_stats.comments_percentage = s.metrics.loc.cloc() / s.metrics.loc.sloc() * 100.0;
-            file_stats.maintainability_index = s.metrics.mi.mi_visual_studio();
+            file_stats.loc = sloc as u32;
         };
     }
 
