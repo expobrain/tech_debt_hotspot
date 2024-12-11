@@ -7,7 +7,7 @@ use tabled::settings::object::Segment;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::Table;
 
-use crate::hotspot::HotstpoStats;
+use crate::hotspot::HotspotStats;
 
 #[derive(Clone, Copy)]
 pub enum OutputFormat {
@@ -37,14 +37,14 @@ impl Output {
         Output { format: *format }
     }
 
-    pub fn format(&self, stats: &[HotstpoStats]) -> Result<String, Box<dyn Error>> {
+    pub fn format(&self, stats: &[HotspotStats]) -> Result<String, Box<dyn Error>> {
         match self.format {
             OutputFormat::Markdown => Self::format_markdown(stats),
             OutputFormat::Csv => Self::format_csv(stats),
         }
     }
 
-    fn format_csv(stats: &[HotstpoStats]) -> Result<String, Box<dyn Error>> {
+    fn format_csv(stats: &[HotspotStats]) -> Result<String, Box<dyn Error>> {
         let mut writer = Writer::from_writer(vec![]);
 
         writer.write_record([
@@ -81,7 +81,7 @@ impl Output {
         Ok(output)
     }
 
-    fn format_markdown(stats: &[HotstpoStats]) -> Result<String, Box<dyn Error>> {
+    fn format_markdown(stats: &[HotspotStats]) -> Result<String, Box<dyn Error>> {
         Ok(Table::new(stats)
             .with(Style::markdown())
             .with(Modify::new(Segment::new(1.., 2..)).with(Alignment::right()))

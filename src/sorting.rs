@@ -1,6 +1,6 @@
 use clap::{builder::PossibleValue, ValueEnum};
 
-use crate::hotspot::HotstpoStats;
+use crate::hotspot::HotspotStats;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SortBy {
@@ -56,7 +56,7 @@ impl ValueEnum for SortBy {
     }
 }
 
-pub fn sort_stats_by(mut stats: Vec<HotstpoStats>, sort_by: SortBy) -> Vec<HotstpoStats> {
+pub fn sort_stats_by(mut stats: Vec<HotspotStats>, sort_by: SortBy) -> Vec<HotspotStats> {
     match sort_by {
         SortBy::Path => {
             stats.sort_unstable_by(|a, b| a.path.cmp(&b.path));

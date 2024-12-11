@@ -18,7 +18,7 @@ struct FileStats {
 }
 
 #[derive(Tabled)]
-pub struct HotstpoStats {
+pub struct HotspotStats {
     pub path: String,
     pub halstead_volume: f64,
     pub cyclomatic_complexity: f64,
@@ -29,9 +29,9 @@ pub struct HotstpoStats {
     pub hotspot_index: f64,
 }
 
-impl HotstpoStats {
-    fn new(file_stats: &FileStats) -> HotstpoStats {
-        HotstpoStats {
+impl HotspotStats {
+    fn new(file_stats: &FileStats) -> HotspotStats {
+        HotspotStats {
             path: file_stats.path.display().to_string(),
             halstead_volume: file_stats.halstead_volume,
             cyclomatic_complexity: file_stats.cyclomatic_complexity,
@@ -59,8 +59,8 @@ impl TechDebtHotspots {
         TechDebtHotspots::default()
     }
 
-    pub fn stats(&self) -> Vec<HotstpoStats> {
-        self.stats.values().map(HotstpoStats::new).collect()
+    pub fn stats(&self) -> Vec<HotspotStats> {
+        self.stats.values().map(HotspotStats::new).collect()
     }
 
     pub fn collect(&mut self, directory: &Path, exclude: Option<&Path>, since: Option<&NaiveDate>) {
