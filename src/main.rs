@@ -55,8 +55,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get_one::<OutputFormat>("output")
         .unwrap_or(&OutputFormat::Markdown);
 
-    let mut hotspot_stats = TechDebtHotspots::new();
-    hotspot_stats.collect(&directory, exclude.as_deref(), since);
+    let mut hotspot_stats = TechDebtHotspots::new(&directory, exclude.as_deref(), since);
+    hotspot_stats.collect();
 
     let stats = sort_stats_by(hotspot_stats.stats(), sort_by);
     let output = Output::new(&output_format).format(&stats)?;

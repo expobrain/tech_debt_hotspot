@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, process::Command};
 use tabled::Tabled;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug, PartialEq)]
 struct FileStats {
     pub path: PathBuf,
     pub halstead_volume: f64,
@@ -17,7 +17,7 @@ struct FileStats {
     pub changes_count: u32,
 }
 
-#[derive(Tabled)]
+#[derive(Tabled, Debug, PartialEq)]
 pub struct HotspotStats {
     pub path: String,
     pub halstead_volume: f64,
@@ -55,20 +55,21 @@ pub struct TechDebtHotspots {
 }
 
 impl TechDebtHotspots {
-    pub fn new() -> Self {
-        TechDebtHotspots::default()
+    pub fn new(directory: &Path, exclude: Option<&Path>, since: Option<&NaiveDate>) -> Self {
+        Self {
+            path: directory.to_path_buf(),
+            exclude: exclude.map(|p| p.to_path_buf()),
+            since: since.cloned(),
+            git_base_path: Self::get_git_base_path(directory),
+            ..Default::default()
+        }
     }
 
     pub fn stats(&self) -> Vec<HotspotStats> {
         self.stats.values().map(HotspotStats::new).collect()
     }
 
-    pub fn collect(&mut self, directory: &Path, exclude: Option<&Path>, since: Option<&NaiveDate>) {
-        self.path = directory.to_path_buf();
-        self.exclude = exclude.map(|p| p.to_path_buf());
-        self.since = since.cloned();
-        self.git_base_path = Self::get_git_base_path(directory);
-
+    pub fn collect(&mut self) {
         self.collect_filenames()
             .get_stats_from_filenames()
             .collect_changes_count()
@@ -221,5 +222,96 @@ impl TechDebtHotspots {
         let path = PathBuf::from(stdout.trim());
 
         path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::*;
+    use tempfile::{tempdir, TempDir};
+
+    #[test]
+    fn test_hotspot_stats_new() {
+        // ARRANGE
+        let file_stats = FileStats {
+            path: PathBuf::from("src/main.rs"),
+            halstead_volume: 10.0,
+            cyclomatic_complexity: 5.0,
+            loc: 100,
+            comments_percentage: 20.0,
+            maintainability_index: 80.0,
+            changes_count: 10,
+        };
+
+        // ACT
+        let actual = HotspotStats::new(&file_stats);
+
+        // ASSERT
+        let expected = HotspotStats {
+            path: "src/main.rs".to_string(),
+            halstead_volume: 10.0,
+            cyclomatic_complexity: 5.0,
+            loc: 100,
+            comments_percentage: 20.0,
+            maintainability_index: 80.0,
+            changes_count: 10,
+            hotspot_index: 10.0 / (80.0 / 100.0),
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[fixture]
+    fn git_repo_with_files() -> (TempDir, PathBuf, PathBuf) {
+        let temp_dir = tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a Git directory structure with some Python files
+        let sub_dir = temp_path.join("subdir");
+        fs::create_dir(&sub_dir).unwrap();
+
+        Command::new("git")
+            .arg("init")
+            .arg(temp_path)
+            .output()
+            .expect("Failed to initialize Git repository");
+
+        let file1 = temp_path.join("file1.py");
+        let file2 = sub_dir.join("file2.py");
+        fs::write(&file1, "print('Hello, world!')").unwrap();
+        fs::write(&file2, "print('Hello, subdir!')").unwrap();
+
+        (temp_dir, file1.to_path_buf(), file2.to_path_buf())
+    }
+    #[rstest]
+    fn test_collect_filenames(git_repo_with_files: (TempDir, PathBuf, PathBuf)) {
+        // ARRANGE
+        let (temp_dir, file1, file2) = git_repo_with_files;
+
+        // ACT
+        let mut tech_debt_hotspots = TechDebtHotspots::new(temp_dir.path(), None, None);
+        tech_debt_hotspots.collect_filenames();
+
+        let actual = tech_debt_hotspots.stats;
+
+        // ASSERT
+        let mut expected = HashMap::new();
+        expected.insert(
+            file1.clone(),
+            FileStats {
+                path: file1.clone(),
+                ..Default::default()
+            },
+        );
+        expected.insert(
+            file2.clone(),
+            FileStats {
+                path: file2.clone(),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(actual, expected);
     }
 }
