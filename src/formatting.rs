@@ -49,7 +49,6 @@ impl Output {
 
         writer.write_record([
             "path",
-            "path_type",
             "halstead_volume",
             "cyclomatic_complexity",
             "loc",
