@@ -33,7 +33,7 @@ result = "^0.17.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.14"
-pytest = "^8.3.3"
+pytest = "^8.3.4"
 pytest-cov = "^6.0.0"
 pytest-clarity = "^1.0.1"
 pytest-testmon = "^2.0.6"
