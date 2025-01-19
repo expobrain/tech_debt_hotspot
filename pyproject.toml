@@ -24,7 +24,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.9"
 radon = "^6.0.1"
-click = "^8.1.7"
+click = "^8.1.8"
 sh = "^2.1.0"
 loguru = "^0.7.3"
 tqdm = "^4.67.1"
