@@ -38,7 +38,7 @@ pytest-cov = "^6.0.0"
 pytest-clarity = "^1.0.1"
 pytest-testmon = "^2.0.6"
 pytest-timeout = "^2.1.0"
-types-tqdm = "^4.67.0.20241119"
+types-tqdm = "^4.67.0.20241221"
 
 
 [build-system]
