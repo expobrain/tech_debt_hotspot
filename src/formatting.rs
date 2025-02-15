@@ -62,7 +62,7 @@ impl Output {
 
         for stat in stats {
             writer
-                .serialize(&[
+                .write_record(&[
                     stat.path.clone(),
                     stat.halstead_volume.to_string(),
                     stat.cyclomatic_complexity.to_string(),
