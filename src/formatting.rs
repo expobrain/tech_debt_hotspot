@@ -47,16 +47,18 @@ impl Output {
     fn format_csv(stats: &[HotspotStats]) -> Result<String, Box<dyn Error>> {
         let mut writer = Writer::from_writer(vec![]);
 
-        writer.write_record([
-            "path",
-            "halstead_volume",
-            "cyclomatic_complexity",
-            "loc",
-            "comments_percentage",
-            "maintainability_index",
-            "changes_count",
-            "hotspot_index",
-        ])?;
+        writer
+            .write_record([
+                "path",
+                "halstead_volume",
+                "cyclomatic_complexity",
+                "loc",
+                "comments_percentage",
+                "maintainability_index",
+                "changes_count",
+                "hotspot_index",
+            ])
+            .expect("Failed to write CSV header");
 
         for stat in stats {
             writer
@@ -70,7 +72,7 @@ impl Output {
                     stat.changes_count.to_string(),
                     stat.hotspot_index.to_string(),
                 ])
-                .unwrap();
+                .expect("Failed to write CSV record");
         }
 
         writer.flush()?;
