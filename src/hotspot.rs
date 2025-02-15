@@ -31,6 +31,11 @@ pub struct HotspotStats {
 
 impl HotspotStats {
     fn new(file_stats: &FileStats) -> HotspotStats {
+        let hotspot_index = match file_stats.maintainability_index {
+            0.0 => f64::INFINITY,
+            _ => file_stats.changes_count as f64 / (file_stats.maintainability_index / 100.0),
+        };
+
         HotspotStats {
             path: file_stats.path.display().to_string(),
             halstead_volume: file_stats.halstead_volume,
@@ -39,8 +44,7 @@ impl HotspotStats {
             comments_percentage: file_stats.comments_percentage,
             maintainability_index: file_stats.maintainability_index,
             changes_count: file_stats.changes_count,
-            hotspot_index: file_stats.changes_count as f64
-                / (file_stats.maintainability_index / 100.0),
+            hotspot_index,
         }
     }
 }
