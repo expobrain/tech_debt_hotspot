@@ -83,11 +83,7 @@ pub fn sort_stats_by(mut stats: Vec<HotspotStats>, sort_by: SortBy) -> Vec<Hotsp
             });
         }
         SortBy::LinesOfCode => {
-            stats.sort_unstable_by(|a, b| {
-                b.loc
-                    .partial_cmp(&a.loc)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            stats.sort_unstable_by(|a, b| b.loc.cmp(&a.loc));
         }
         SortBy::CommentsPercentage => {
             stats.sort_unstable_by(|a, b| {
@@ -97,11 +93,7 @@ pub fn sort_stats_by(mut stats: Vec<HotspotStats>, sort_by: SortBy) -> Vec<Hotsp
             });
         }
         SortBy::ChangesCount => {
-            stats.sort_unstable_by(|a, b| {
-                b.changes_count
-                    .partial_cmp(&a.changes_count)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            stats.sort_unstable_by(|a, b| b.changes_count.cmp(&a.changes_count));
         }
         SortBy::HotspotIndex => {
             stats.sort_unstable_by(|a, b| {
