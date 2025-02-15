@@ -200,8 +200,12 @@ impl TechDebtHotspots {
     fn normalise_to_git_root(&mut self) -> &mut Self {
         for (_, file_stats) in self.stats.iter_mut() {
             let path = Path::new(&file_stats.path).to_path_buf();
-            let relative_path = path.strip_prefix(&self.git_base_path).unwrap();
-            file_stats.path = relative_path.to_path_buf();
+            let relative_path = path.strip_prefix(&self.git_base_path);
+
+            match relative_path {
+                Ok(relative_path) => file_stats.path = relative_path.to_path_buf(),
+                Err(_) => panic!("Path is not in the Git repository"),
+            }
         }
 
         self
@@ -288,6 +292,7 @@ mod tests {
 
         (temp_dir, file1.to_path_buf(), file2.to_path_buf())
     }
+
     #[rstest]
     fn test_collect_filenames(git_repo_with_files: (TempDir, PathBuf, PathBuf)) {
         // ARRANGE
@@ -317,5 +322,48 @@ mod tests {
         );
 
         assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    fn test_normalise_to_git_root() {
+        // ARRANGE
+        let temp_dir = tempdir().unwrap();
+        let git_base_path = temp_dir.path().to_path_buf();
+        let file_path = git_base_path.join("src/main.py");
+
+        // Create a TechDebtHotspots instance
+        let mut tech_debt_hotspots = TechDebtHotspots {
+            git_base_path: git_base_path.clone(),
+            stats: HashMap::new(),
+            path: git_base_path.clone(),
+            exclude: None,
+            since: None,
+        };
+
+        // Insert a FileStats entry with an absolute path
+        tech_debt_hotspots.stats.insert(
+            file_path.clone(),
+            FileStats {
+                path: file_path.clone(),
+                ..Default::default()
+            },
+        );
+
+        // ACT
+        tech_debt_hotspots.normalise_to_git_root();
+
+        // ASSERT
+        let normalized_path = tech_debt_hotspots
+            .stats
+            .get(&file_path)
+            .unwrap()
+            .path
+            .clone();
+        let expected_relative_path = file_path
+            .strip_prefix(&git_base_path)
+            .unwrap()
+            .to_path_buf();
+
+        assert_eq!(normalized_path, expected_relative_path);
     }
 }
