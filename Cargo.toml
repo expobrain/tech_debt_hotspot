@@ -13,4 +13,4 @@ tabled = "0.16.0"
 
 [dev-dependencies]
 rstest = "0.23.0"
-tempfile = "3.14.0"
+tempfile = "3.17.0"
