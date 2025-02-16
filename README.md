@@ -1,6 +1,6 @@
 # tech_debt_hotspot
 
-[![Unit testing, formatting & linting](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/main.yml/badge.svg)](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/main.yml)
+[![Unit testing, formatting & linting](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/testing-formatting-linting.yml/badge.svg)](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/testing-formatting-linting.yml)
 
 A tool to identify hotspots of tech debt in a Python codebase.
 
