@@ -15,6 +15,10 @@ This tools collects the maintainability index and the number of changes in the r
 - **changes**: the number of changes in the module or package from the version control
 - **hotspot_score**: the inverse of the number of changes over the maintainability index
 
+## Language supported
+
+The tool currently supports only Python.
+
 ## Usage
 
 ```bash
