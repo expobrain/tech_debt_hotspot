@@ -123,13 +123,13 @@ impl TechDebtHotspots {
             .arg("--pretty=format:");
 
         if let Some(since) = self.since {
-            command.arg(format!("--since={}", since));
+            command.arg(format!("--since={since}"));
         }
 
         let output = command
             .arg(".")
             .output()
-            .map_err(|e| format!("Failed to execute git command: {}", e))
+            .map_err(|e| format!("Failed to execute git command: {e}"))
             .unwrap();
 
         if !output.status.success() {
@@ -141,7 +141,7 @@ impl TechDebtHotspots {
         }
 
         let stdout = String::from_utf8(output.stdout)
-            .map_err(|e| format!("Failed to parse git output: {}", e))
+            .map_err(|e| format!("Failed to parse git output: {e}"))
             .unwrap();
         let lines = stdout.lines().filter(|line| !line.trim().is_empty());
 
