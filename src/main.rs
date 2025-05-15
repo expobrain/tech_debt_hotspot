@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stats = sort_stats_by(hotspot_stats.stats(), sort_by);
     let output = Output::new(&output_format).format(&stats)?;
 
-    println!("{}", output);
+    println!("{output}");
 
     Ok(())
 }
