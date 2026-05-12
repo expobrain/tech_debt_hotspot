@@ -106,11 +106,13 @@ impl TechDebtHotspots {
                         paths_to_visit.push(path_to_visit);
                     });
                 }
-                false if current_path
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .and_then(extension_to_lang)
-                    .is_some() => {
+                false
+                    if current_path
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .and_then(extension_to_lang)
+                        .is_some() =>
+                {
                     self.stats.insert(
                         current_path.to_path_buf(),
                         FileStats {
@@ -343,9 +345,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_extension_to_lang_unknown(
-        #[values("txt", "md", "", "rs", "java", "cpp")] ext: &str,
-    ) {
+    fn test_extension_to_lang_unknown(#[values("txt", "md", "", "rs", "java", "cpp")] ext: &str) {
         assert!(
             super::extension_to_lang(ext).is_none(),
             "Expected {ext} to not map to any language"
