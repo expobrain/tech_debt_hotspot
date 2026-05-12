@@ -58,6 +58,13 @@ fn extension_to_lang(ext: &str) -> Option<LANG> {
     }
 }
 
+fn is_supported_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .and_then(extension_to_lang)
+        .is_some()
+}
+
 #[derive(Default)]
 pub struct TechDebtHotspots {
     git_base_path: PathBuf,
@@ -106,13 +113,7 @@ impl TechDebtHotspots {
                         paths_to_visit.push(path_to_visit);
                     });
                 }
-                false
-                    if current_path
-                        .extension()
-                        .and_then(|s| s.to_str())
-                        .and_then(extension_to_lang)
-                        .is_some() =>
-                {
+                false if is_supported_file(&current_path) => {
                     self.stats.insert(
                         current_path.to_path_buf(),
                         FileStats {
@@ -349,6 +350,41 @@ mod tests {
         assert!(
             super::extension_to_lang(ext).is_none(),
             "Expected {ext} to not map to any language"
+        );
+    }
+
+    #[rstest]
+    fn test_get_stats_from_filename_parses_supported_languages(
+        #[values("py", "js", "ts", "tsx")] ext: &str,
+    ) {
+        let temp_dir = tempdir().unwrap();
+        let source = match ext {
+            "py" => "x = 1\ny = 2\nprint(x + y)\n",
+            "js" => "const x = 1;\nconst y = 2;\nconsole.log(x + y);\n",
+            "ts" => "const x: number = 1;\nconst y: number = 2;\nconsole.log(x + y);\n",
+            "tsx" => "const x: number = 1;\nconst y: number = 2;\nconsole.log(x + y);\n",
+            _ => "",
+        };
+
+        let path = temp_dir.path().join(format!("test.{ext}"));
+        fs::write(&path, source).unwrap();
+
+        let mut file_stats = FileStats {
+            path: path.clone(),
+            ..Default::default()
+        };
+
+        TechDebtHotspots::get_stats_from_filename(&mut file_stats);
+
+        assert!(
+            file_stats.loc > 0,
+            "Expected loc > 0 for .{ext}, got {}",
+            file_stats.loc
+        );
+        assert!(
+            file_stats.maintainability_index > 0.0,
+            "Expected maintainability_index > 0 for .{ext}, got {}",
+            file_stats.maintainability_index
         );
     }
 
