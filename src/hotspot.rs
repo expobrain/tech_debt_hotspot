@@ -163,7 +163,7 @@ impl TechDebtHotspots {
     }
 
     fn get_stats_from_filenames(&mut self) -> &mut Self {
-        for (_, file_stats) in self.stats.iter_mut() {
+        for file_stats in self.stats.values_mut() {
             Self::get_stats_from_filename(file_stats);
         }
 
@@ -198,7 +198,7 @@ impl TechDebtHotspots {
     }
 
     fn normalise_to_git_root(&mut self) -> &mut Self {
-        for (_, file_stats) in self.stats.iter_mut() {
+        for file_stats in self.stats.values_mut() {
             let path = Path::new(&file_stats.path).to_path_buf();
             let relative_path = path.strip_prefix(&self.git_base_path);
 
