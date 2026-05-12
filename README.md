@@ -2,7 +2,7 @@
 
 [![Unit testing, formatting & linting](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/testing-formatting-linting.yml/badge.svg)](https://github.com/expobrain/tech_debt_hotspot/actions/workflows/testing-formatting-linting.yml)
 
-A tool to identify hotspots of tech debt in a Python codebase.
+A tool to identify hotspots of tech debt in a codebase.
 
 ⚠️ **WARNING**: The binary of this tool is not signed so on OSX it will raise a warning. See the official [instructions](https://support.apple.com/en-gb/guide/mac-help/mh40616/mac) to allow the execution of unsigned binaries on OSX.
 
@@ -10,15 +10,11 @@ A tool to identify hotspots of tech debt in a Python codebase.
 
 This tools collects the maintainability index and the number of changes in the repository for each file of the codebase and aggregated for each package and outputs a CSV with:
 
-- **path**: the path of the Python module or package
+- **path**: the path of the module or package
 - **path_type**: the type of the path (module or package)
 - **maintainability_index**: the maintainability index of the module or package calulated by using the Visual Studio's [formula](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning)
 - **changes**: the number of changes in the module or package from the version control
 - **hotspot_score**: the inverse of the number of changes over the maintainability index
-
-## Language supported
-
-The tool currently supports only Python.
 
 ## Usage
 
