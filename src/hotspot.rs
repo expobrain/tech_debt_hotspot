@@ -1,7 +1,6 @@
 use chrono::NaiveDate;
 use core::panic;
-use rust_code_analysis::ParserTrait;
-use rust_code_analysis::{metrics, PythonParser};
+use rust_code_analysis::{get_function_spaces, LANG};
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, process::Command};
 use tabled::Tabled;
@@ -46,6 +45,16 @@ impl HotspotStats {
             changes_count: file_stats.changes_count,
             hotspot_index,
         }
+    }
+}
+
+fn extension_to_lang(ext: &str) -> Option<LANG> {
+    match ext {
+        "py" => Some(LANG::Python),
+        "js" | "mjs" | "jsx" => Some(LANG::Javascript),
+        "ts" => Some(LANG::Typescript),
+        "tsx" => Some(LANG::Tsx),
+        _ => None,
     }
 }
 
@@ -97,7 +106,11 @@ impl TechDebtHotspots {
                         paths_to_visit.push(path_to_visit);
                     });
                 }
-                false if current_path.extension().and_then(|s| s.to_str()) == Some("py") => {
+                false if current_path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .and_then(extension_to_lang)
+                    .is_some() => {
                     self.stats.insert(
                         current_path.to_path_buf(),
                         FileStats {
@@ -173,9 +186,10 @@ impl TechDebtHotspots {
     fn get_stats_from_filename(file_stats: &mut FileStats) {
         let path = Path::new(&file_stats.path).to_path_buf();
         let source_code = fs::read(path.clone()).unwrap();
-        let parser = PythonParser::new(source_code, &path, None);
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let lang = extension_to_lang(ext).unwrap();
 
-        if let Some(s) = metrics(&parser, &path) {
+        if let Some(s) = get_function_spaces(&lang, source_code, &path, None) {
             let sloc = s.metrics.loc.sloc();
 
             match sloc {
@@ -271,11 +285,10 @@ mod tests {
     }
 
     #[fixture]
-    fn git_repo_with_files() -> (TempDir, PathBuf, PathBuf) {
+    fn git_repo_with_files() -> (TempDir, Vec<PathBuf>) {
         let temp_dir = tempdir().unwrap();
         let temp_path = temp_dir.path();
 
-        // Create a Git directory structure with some Python files
         let sub_dir = temp_path.join("subdir");
         fs::create_dir(&sub_dir).unwrap();
 
@@ -285,18 +298,25 @@ mod tests {
             .output()
             .expect("Failed to initialize Git repository");
 
-        let file1 = temp_path.join("file1.py");
-        let file2 = sub_dir.join("file2.py");
-        fs::write(&file1, "print('Hello, world!')").unwrap();
-        fs::write(&file2, "print('Hello, subdir!')").unwrap();
+        let py_file = temp_path.join("file1.py");
+        let js_file = sub_dir.join("file2.js");
+        let ts_file = temp_path.join("file3.ts");
+        let tsx_file = sub_dir.join("file4.tsx");
+        let txt_file = temp_path.join("readme.txt");
 
-        (temp_dir, file1.to_path_buf(), file2.to_path_buf())
+        fs::write(&py_file, "print('Hello, world!')").unwrap();
+        fs::write(&js_file, "const x = 1;").unwrap();
+        fs::write(&ts_file, "const x: number = 1;").unwrap();
+        fs::write(&tsx_file, "const x: number = 1;").unwrap();
+        fs::write(&txt_file, "just text").unwrap();
+
+        (temp_dir, vec![py_file, js_file, ts_file, tsx_file])
     }
 
     #[rstest]
-    fn test_collect_filenames(git_repo_with_files: (TempDir, PathBuf, PathBuf)) {
+    fn test_collect_filenames(git_repo_with_files: (TempDir, Vec<PathBuf>)) {
         // ARRANGE
-        let (temp_dir, file1, file2) = git_repo_with_files;
+        let (temp_dir, supported_files) = git_repo_with_files;
 
         // ACT
         let mut tech_debt_hotspots = TechDebtHotspots::new(temp_dir.path(), None, None);
@@ -305,23 +325,31 @@ mod tests {
         let actual = tech_debt_hotspots.stats;
 
         // ASSERT
-        let mut expected = HashMap::new();
-        expected.insert(
-            file1.clone(),
-            FileStats {
-                path: file1.clone(),
-                ..Default::default()
-            },
-        );
-        expected.insert(
-            file2.clone(),
-            FileStats {
-                path: file2.clone(),
-                ..Default::default()
-            },
-        );
+        assert_eq!(actual.len(), 4);
 
-        assert_eq!(actual, expected);
+        for path in &supported_files {
+            assert!(actual.contains_key(path), "Missing: {}", path.display());
+        }
+    }
+
+    #[rstest]
+    fn test_extension_to_lang_supported(
+        #[values("py", "js", "mjs", "jsx", "ts", "tsx")] ext: &str,
+    ) {
+        assert!(
+            super::extension_to_lang(ext).is_some(),
+            "Expected {ext} to map to a language"
+        );
+    }
+
+    #[rstest]
+    fn test_extension_to_lang_unknown(
+        #[values("txt", "md", "", "rs", "java", "cpp")] ext: &str,
+    ) {
+        assert!(
+            super::extension_to_lang(ext).is_none(),
+            "Expected {ext} to not map to any language"
+        );
     }
 
     #[rstest]
