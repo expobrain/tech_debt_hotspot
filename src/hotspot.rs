@@ -1,8 +1,14 @@
 use chrono::NaiveDate;
 use core::panic;
 use rust_code_analysis::{get_function_spaces, LANG};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::{collections::HashMap, fs, path::Path, process::Command};
+use std::{
+    collections::HashMap,
+    fs,
+    path::Path,
+    process::{Command, Stdio},
+};
 use tabled::Tabled;
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -96,34 +102,62 @@ impl TechDebtHotspots {
             .normalise_to_git_root();
     }
 
-    fn collect_filenames(&mut self) -> &mut Self {
-        let mut paths_to_visit = vec![self.path.clone()];
+    fn scan_pathspec(&self) -> &Path {
+        match self.path.strip_prefix(&self.git_base_path) {
+            Ok(rel) if rel.as_os_str().is_empty() => Path::new("."),
+            Ok(rel) => rel,
+            Err(_) => self.path.as_path(),
+        }
+    }
 
-        while let Some(current_path) = paths_to_visit.pop() {
+    fn collect_filenames(&mut self) -> &mut Self {
+        let scan_pathspec = self.scan_pathspec();
+
+        let mut command = Command::new("git");
+        command
+            .current_dir(&self.git_base_path)
+            .arg("ls-files")
+            .arg("-z")
+            .arg("--")
+            .arg(scan_pathspec);
+
+        let output = command
+            .output()
+            .unwrap_or_else(|e| panic!("Failed to execute git ls-files: {e}"));
+
+        if !output.status.success() {
+            panic!(
+                "git ls-files failed with status {}: {:?}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        for entry in output.stdout.split(|&b| b == 0) {
+            if entry.is_empty() {
+                continue;
+            }
+
+            let relative_path = PathBuf::from(String::from_utf8_lossy(entry).into_owned());
+
+            if !is_supported_file(&relative_path) {
+                continue;
+            }
+
+            let absolute_path = self.git_base_path.join(&relative_path);
             if let Some(ref exclude) = self.exclude {
-                if current_path.starts_with(exclude) {
+                if absolute_path.starts_with(exclude) {
                     continue;
                 }
             }
 
-            match current_path.is_dir() {
-                true => {
-                    current_path.read_dir().unwrap().for_each(|entry| {
-                        let path_to_visit = entry.unwrap().path();
-                        paths_to_visit.push(path_to_visit);
-                    });
-                }
-                false if is_supported_file(&current_path) => {
-                    self.stats.insert(
-                        current_path.to_path_buf(),
-                        FileStats {
-                            path: current_path,
-                            ..Default::default()
-                        },
-                    );
-                }
-                _ => {}
-            }
+            self.stats.insert(
+                relative_path.clone(),
+                FileStats {
+                    path: relative_path,
+                    ..Default::default()
+                },
+            );
         }
 
         self
@@ -133,7 +167,7 @@ impl TechDebtHotspots {
         let mut command = Command::new("git");
 
         command
-            .current_dir(self.path.clone())
+            .current_dir(&self.path)
             .arg("log")
             .arg("--name-only")
             .arg("--pretty=format:");
@@ -142,57 +176,59 @@ impl TechDebtHotspots {
             command.arg(format!("--since={since}"));
         }
 
-        let output = command
-            .arg(".")
-            .output()
-            .map_err(|e| format!("Failed to execute git command: {e}"))
-            .unwrap();
+        command.arg(".").stdout(Stdio::piped());
 
-        if !output.status.success() {
-            panic!(
-                "Git command failed with status {}: {:?}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
+        let mut child = command
+            .spawn()
+            .unwrap_or_else(|e| panic!("Failed to execute git log: {e}"));
 
-        let stdout = String::from_utf8(output.stdout)
-            .map_err(|e| format!("Failed to parse git output: {e}"))
-            .unwrap();
-        let lines = stdout.lines().filter(|line| !line.trim().is_empty());
+        let stdout = child.stdout.take().expect("git log stdout should be piped");
+        let reader = BufReader::new(stdout);
 
-        for line in lines {
-            let filename_path = PathBuf::from(line);
-            let absolute_path = self.git_base_path.join(&filename_path);
-
-            if !absolute_path.exists() {
+        for line in reader.lines() {
+            let line = line.unwrap_or_else(|e| panic!("Failed to read git log line: {e}"));
+            let line = line.trim();
+            if line.is_empty() {
                 continue;
             }
 
-            // update filename stats
-            if let Some(existing) = self.stats.get_mut(&absolute_path) {
+            let filename_path = PathBuf::from(line);
+            if let Some(existing) = self.stats.get_mut(&filename_path) {
                 existing.changes_count += 1;
-            };
+            }
+        }
+
+        let status = child
+            .wait()
+            .unwrap_or_else(|e| panic!("Failed to wait for git log: {e}"));
+
+        if !status.success() {
+            panic!("Git log failed with status {status}");
         }
 
         self
     }
 
     fn get_stats_from_filenames(&mut self) -> &mut Self {
+        let git_base_path = self.git_base_path.clone();
         for file_stats in self.stats.values_mut() {
-            Self::get_stats_from_filename(file_stats);
+            Self::get_stats_from_filename(&git_base_path, file_stats);
         }
 
         self
     }
 
-    fn get_stats_from_filename(file_stats: &mut FileStats) {
-        let path = Path::new(&file_stats.path).to_path_buf();
-        let source_code = fs::read(path.clone()).unwrap();
-        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    fn get_stats_from_filename(git_base_path: &Path, file_stats: &mut FileStats) {
+        let absolute_path = git_base_path.join(&file_stats.path);
+        let source_code = fs::read(&absolute_path).unwrap();
+        let ext = file_stats
+            .path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
         let lang = extension_to_lang(ext).unwrap();
 
-        if let Some(s) = get_function_spaces(&lang, source_code, &path, None) {
+        if let Some(s) = get_function_spaces(&lang, source_code, &absolute_path, None) {
             let sloc = s.metrics.loc.sloc();
 
             match sloc {
@@ -208,7 +244,6 @@ impl TechDebtHotspots {
                 }
             }
 
-            file_stats.path = path;
             file_stats.cyclomatic_complexity = s.metrics.cyclomatic.cyclomatic_max();
             file_stats.loc = sloc as u32;
         };
@@ -216,13 +251,15 @@ impl TechDebtHotspots {
 
     fn normalise_to_git_root(&mut self) -> &mut Self {
         for file_stats in self.stats.values_mut() {
-            let path = Path::new(&file_stats.path).to_path_buf();
-            let relative_path = path.strip_prefix(&self.git_base_path);
-
-            match relative_path {
-                Ok(relative_path) => file_stats.path = relative_path.to_path_buf(),
-                Err(_) => panic!("Path is not in the Git repository"),
+            if !file_stats.path.is_absolute() {
+                continue;
             }
+
+            file_stats.path = file_stats
+                .path
+                .strip_prefix(&self.git_base_path)
+                .unwrap_or_else(|_| panic!("Path is not in the Git repository"))
+                .to_path_buf();
         }
 
         self
@@ -287,6 +324,15 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    fn git_add_all(repo_path: &Path) {
+        let status = Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "."])
+            .status()
+            .expect("Failed to run git add");
+        assert!(status.success(), "git add failed");
+    }
+
     #[fixture]
     fn git_repo_with_files() -> (TempDir, Vec<PathBuf>) {
         let temp_dir = tempdir().unwrap();
@@ -313,7 +359,16 @@ mod tests {
         fs::write(&tsx_file, "const x: number = 1;").unwrap();
         fs::write(&txt_file, "just text").unwrap();
 
-        (temp_dir, vec![py_file, js_file, ts_file, tsx_file])
+        git_add_all(temp_path);
+
+        let relative_supported = vec![
+            PathBuf::from("file1.py"),
+            PathBuf::from("subdir/file2.js"),
+            PathBuf::from("file3.ts"),
+            PathBuf::from("subdir/file4.tsx"),
+        ];
+
+        (temp_dir, relative_supported)
     }
 
     #[rstest]
@@ -333,6 +388,20 @@ mod tests {
         for path in &supported_files {
             assert!(actual.contains_key(path), "Missing: {}", path.display());
         }
+    }
+
+    #[rstest]
+    fn test_collect_filenames_excludes_untracked(git_repo_with_files: (TempDir, Vec<PathBuf>)) {
+        let (temp_dir, _) = git_repo_with_files;
+        let untracked = temp_dir.path().join("untracked.py");
+        fs::write(&untracked, "print('untracked')").unwrap();
+
+        let mut tech_debt_hotspots = TechDebtHotspots::new(temp_dir.path(), None, None);
+        tech_debt_hotspots.collect_filenames();
+
+        assert!(!tech_debt_hotspots
+            .stats
+            .contains_key(&PathBuf::from("untracked.py")));
     }
 
     #[rstest]
@@ -374,7 +443,7 @@ mod tests {
             ..Default::default()
         };
 
-        TechDebtHotspots::get_stats_from_filename(&mut file_stats);
+        TechDebtHotspots::get_stats_from_filename(temp_dir.path(), &mut file_stats);
 
         assert!(
             file_stats.loc > 0,
